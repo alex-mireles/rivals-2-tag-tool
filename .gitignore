@@ -1,0 +1,30 @@
+# Build output
+dist/
+build/
+*.exe
+
+# PyInstaller
+*.spec.bak
+__pycache__/
+*.py[cod]
+
+# uesave dependency
+uesave.exe
+
+# Rivals 2 save files
+*.sav
+*.sav.bak
+*.r2tag
+
+# Python environment
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
