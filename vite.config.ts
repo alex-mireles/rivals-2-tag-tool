@@ -1,12 +1,17 @@
 import { defineConfig } from "vite";
+import { readFileSync } from "fs";
 import vue from "@vitejs/plugin-vue";
 
-// @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [vue()],
+
+  define: {
+    APP_VERSION: JSON.stringify(packageJson.version)
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

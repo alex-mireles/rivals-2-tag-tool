@@ -1,32 +1,21 @@
 <script setup lang="ts">
-import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
+import { ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 
-const greetMsg = ref("");
-const name = ref("");
+const greetMsg = ref('');
+const name = ref('');
+const appVersion = APP_VERSION
 
 async function greet() {
   // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+  greetMsg.value = await invoke('greet', { name: name.value });
 }
 </script>
 
 <template>
   <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
-
-    <div class="row">
-      <a href="https://vite.dev" target="_blank">
-        <img src="/vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="/tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
+    <h1>Rivals 2 Tag Tool</h1>
+    <p>Version {{ appVersion }}</p>
 
     <form class="row" @submit.prevent="greet">
       <input id="greet-input" v-model="name" placeholder="Enter a name..." />
@@ -53,8 +42,8 @@ async function greet() {
   line-height: 24px;
   font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  color: #f6f6f6;
+  background-color: #2f2f2f;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -95,7 +84,7 @@ a {
 }
 
 a:hover {
-  color: #535bf2;
+  color: #24c8db;
 }
 
 h1 {
@@ -110,8 +99,8 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
+  color: #ffffff;
+  background-color: #0f0f0f98;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
 }
@@ -125,7 +114,7 @@ button:hover {
 }
 button:active {
   border-color: #396cd8;
-  background-color: #e8e8e8;
+  background-color: #0f0f0f69;
 }
 
 input,
@@ -137,24 +126,24 @@ button {
   margin-right: 5px;
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: light) {
   :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+    color: #0f0f0f;
+    background-color: #f6f6f6;
   }
 
   a:hover {
-    color: #24c8db;
+    color: #535bf2;
   }
 
   input,
   button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
+    color: #0f0f0f;
+    background-color: #ffffff;
   }
   button:active {
-    background-color: #0f0f0f69;
+    background-color: #e8e8e8;
   }
-}
+} */
 
 </style>

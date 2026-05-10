@@ -19,5 +19,8 @@ export default defineConfig([
       quotes: ["error", "single"],
       "vue/max-attributes-per-line": "off",
     },
+    globals: {
+      APP_VERSION: 'readonly'
+    }
   },
 ]);

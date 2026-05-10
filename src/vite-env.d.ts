@@ -1,3 +1,4 @@
+/* eslint-disable */
 /// <reference types="vite/client" />
 
 declare module "*.vue" {
@@ -5,3 +6,5 @@ declare module "*.vue" {
   const component: DefineComponent<{}, {}, any>;
   export default component;
 }
+
+declare const APP_VERSION: string;
