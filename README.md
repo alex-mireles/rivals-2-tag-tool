@@ -6,20 +6,15 @@ Export, share, and import Rivals of Aether II tags & custom controls. Stop re-en
 
 ## Usage
 
-Open `Rivals2TagTool.exe` on a Windows machine with Rivals of Aether II installed.
-
 **Players (at home):**
 Export your custom player tag and controls to a `.r2tag` file, then send it to your tournament organizers.
 
 **Tournament Organizers:**
-Gather all of your entrants' `.r2tag` files, and import them directly into your setups with a simple `.exe` on a USB stick.
+Gather all of your entrants' `.r2tag` files, and import them directly onto your setups!
 
 ## Requirements
 
-This section is a WIP.
-
-Requirements:
-- uesave
+This section is a WIP!
 
 ### Getting uesave
 
