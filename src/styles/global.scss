@@ -33,7 +33,7 @@ button:focus-visible {
 
   // Accent
   --accent:         rgba(99, 102, 241, 0.80);
-  --accent-hover:   rgba(99, 102, 241, 0.90);
+  --accent-hover:   rgba(255, 255, 255, 0.3);
 
   // Text
   --text-primary:   #ffffff;
@@ -44,7 +44,6 @@ button:focus-visible {
   --line:           rgba(255, 255, 255, 0.08);
   --line-subtle:    rgba(255, 255, 255, 0.04);
   --line-divider:   rgba(255, 255, 255, 0.05);
-  --hover-glow:     rgba(255, 255, 255, 0.2);
 
   // Border radii
   --radius-card:    1em;

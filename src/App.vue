@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import './styles/global.scss';
 
 const appVersion = APP_VERSION;
 const errorMsg = ref('');
@@ -132,18 +131,19 @@ async function loadTagNames() {
   border-radius: var(--radius-button);
   padding: 0.625rem 0;
   border: none;
-  transition: background-color 250ms, box-shadow 250ms, transform 250ms;
+  transition: filter 250ms, transform 250ms;
+
+  &:hover {
+    transform: translateY(-0.2em);
+    filter: brightness(1.1);
+    backdrop-filter: brightness(1.1);
+  }
 
   &-primary {
     background: var(--accent);
     color: white;
     font-size: 0.875rem;
     margin-bottom: 1.25rem;
-
-    &:hover {
-      transform: translateY(-0.2em);
-      box-shadow: inset 0 0 0 1.5em var(--hover-glow);
-    }
   }
 
   &-ghost {
@@ -152,10 +152,6 @@ async function loadTagNames() {
     border: 1px solid var(--line);
     font-size: 13px;
     font-weight: 500;
-
-    &:hover {
-      background: var(--surface-hover);
-    }
   }
 }
 
