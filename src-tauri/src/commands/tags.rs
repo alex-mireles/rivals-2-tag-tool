@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::BufReader;
-use uesave::{Property, StructValue, ValueVec, Save};
+use uesave::{Property, Save, StructValue, ValueVec};
 
 #[tauri::command]
 pub fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
@@ -12,9 +12,8 @@ pub fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
 
     let tag_structs = match tags_property {
         Property::Array(ValueVec::Struct(structs)) => structs,
-        Property::Array(_) => {
-            return Err("SavedPlayerTags array does not contain structs".into())
-        } _ => return Err("SavedPlayerTags is not an array".into()),
+        Property::Array(_) => return Err("SavedPlayerTags array does not contain structs".into()),
+        _ => return Err("SavedPlayerTags is not an array".into()),
     };
 
     let mut tag_names = Vec::new();

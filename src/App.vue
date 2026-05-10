@@ -1,14 +1,30 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 
 const appVersion = APP_VERSION;
+
 const errorMsg = ref('');
 const tagNames = ref<string[]>([]);
 const hasLoaded = ref(false);
 
-const TEST_SAVE_PATH =
-  '/home/hyper/code/projects/rivals-2-tag-tool/test-data/Rivals2_PlayerTagSaveSlot.sav';
+let savePath = ref('');
+
+async function openFilePicker() {
+  const defaultPath = await invoke<string>('get_default_save_path');
+
+  const filePath = await open({
+    multiple: false,
+    title: 'Choose a Save File',
+    filters: [{ name: '.sav file', extensions: ['sav'] }],
+    defaultPath: defaultPath,
+  });
+
+  if (!filePath) return;
+
+  console.log(filePath);
+}
 
 async function loadTagNames() {
   errorMsg.value = '';
@@ -17,7 +33,7 @@ async function loadTagNames() {
 
   try {
     tagNames.value = await invoke<string[]>('get_tag_names', {
-      savePath: TEST_SAVE_PATH,
+      savePath: savePath,
     });
     hasLoaded.value = true;
   } catch (error) {
@@ -37,13 +53,17 @@ async function loadTagNames() {
 
       <div class="save-path-row">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="save-path-icon">
-          <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.2" />
+          <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.5" />
         </svg>
-        <span class="save-path-label">No save file loaded</span>
+        <span class="save-path-label">{{ savePath || 'no save slot selected'}}</span>
       </div>
 
-      <button class="btn btn-primary" @click="loadTagNames">
+      <button class="btn btn-primary" @click="openFilePicker">
         Choose a Save File
+      </button>
+
+      <button v-if="savePath" class="btn btn-primary" @click="loadTagNames">
+        Load Tags
       </button>
 
       <div class="tag-panel">
@@ -131,7 +151,7 @@ async function loadTagNames() {
   border-radius: var(--radius-button);
   padding: 0.625rem 0;
   border: none;
-  transition: filter 250ms, transform 250ms;
+  transition: filter 500ms, transform 500ms;
 
   &:hover {
     transform: translateY(-0.2em);
