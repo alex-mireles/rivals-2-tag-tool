@@ -2,13 +2,27 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-const greetMsg = ref('');
-const name = ref('');
-const appVersion = APP_VERSION
+const appVersion = APP_VERSION;
+const tagNames = ref<string[]>([]);
+const errorMsg = ref('');
+const hasLoaded = ref(false);
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke('greet', { name: name.value });
+const TEST_SAVE_PATH =
+  '/home/hyper/code/projects/rivals-2-tag-tool/test-data/Rivals2_PlayerTagSaveSlot.sav';
+
+async function loadTagNames() {
+  errorMsg.value = '';
+  tagNames.value = [];
+  hasLoaded.value = false;
+
+  try {
+    tagNames.value = await invoke<string[]>('get_tag_names', {
+      savePath: TEST_SAVE_PATH,
+    });
+    hasLoaded.value = true;
+  } catch (error) {
+    errorMsg.value = String(error);
+  }
 }
 </script>
 
@@ -17,24 +31,34 @@ async function greet() {
     <h1>Rivals 2 Tag Tool</h1>
     <p>Version {{ appVersion }}</p>
 
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
+    <button @click="loadTagNames">Load Tag Names</button>
+
+    <p v-if="errorMsg" class="error">Error: {{ errorMsg }}</p>
+
+    <div v-if="hasLoaded">
+      <p>Found {{ tagNames.length }} tag(s):</p>
+      <ul>
+        <li v-for="name in tagNames" :key="name">{{ name }}</li>
+      </ul>
+    </div>
   </main>
 </template>
 
 <style scoped>
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
+.error {
+  color: #ff6b6b;
 }
 
-.logo.vue:hover {
-  filter: drop-shadow(0 0 2em #249b73);
+ul {
+  list-style: none;
+  padding: 0;
 }
 
+li {
+  padding: 0.3em 0;
+}
 </style>
+
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
@@ -61,37 +85,6 @@ async function greet() {
   text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #24c8db;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -103,47 +96,23 @@ button {
   background-color: #0f0f0f98;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
   cursor: pointer;
 }
 
 button:hover {
   border-color: #396cd8;
 }
+
 button:active {
   border-color: #396cd8;
   background-color: #0f0f0f69;
 }
 
-input,
 button {
   outline: none;
 }
 
-#greet-input {
-  margin-right: 5px;
+h1 {
+  text-align: center;
 }
-
-/* @media (prefers-color-scheme: light) {
-  :root {
-    color: #0f0f0f;
-    background-color: #f6f6f6;
-  }
-
-  a:hover {
-    color: #535bf2;
-  }
-
-  input,
-  button {
-    color: #0f0f0f;
-    background-color: #ffffff;
-  }
-  button:active {
-    background-color: #e8e8e8;
-  }
-} */
-
 </style>

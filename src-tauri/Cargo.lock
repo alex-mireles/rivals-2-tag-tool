@@ -3010,6 +3010,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "uesave",
 ]
 
 [[package]]
@@ -4248,6 +4249,19 @@ dependencies = [
  "memoffset",
  "tempfile",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "uesave"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac9909553256ee99ff7ca12594fbf3b9aa47811e775b535edfaa4edf7065f620"
+dependencies = [
+ "bitflags 2.11.0",
+ "byteorder",
+ "indexmap 2.13.0",
+ "serde",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
