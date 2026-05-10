@@ -32,7 +32,7 @@ async function loadTagNames() {
     <div class="card">
 
       <div class="card-header">
-        <h1 class="app-title">Rivals 2 Tag Tool</h1>
+        <h1 class="app-title">Rivals of Aether II Tag Tool</h1>
         <span class="app-version">v{{ appVersion }}</span>
       </div>
 
@@ -44,22 +44,22 @@ async function loadTagNames() {
       </div>
 
       <button class="btn btn-primary" @click="loadTagNames">
-        Load tags from save file
+        Choose a Save File
       </button>
 
       <div class="tag-panel">
-        <div class="tag-panel__header">
-          <span class="tag-panel__label">Player tags</span>
+        <div class="tag-panel-header">
+          <span class="tag-panel-label">Player tags</span>
         </div>
 
-        <div class="tag-panel__empty">
-          <span class="tag-panel__empty-message">Load a save file to see tags</span>
+        <div class="tag-panel-empty">
+          <span class="tag-panel-empty-message">Load a save file to see tags</span>
         </div>
       </div>
 
       <div class="action-row">
-        <button class="btn btn-ghost">Export selected</button>
-        <button class="btn btn-ghost">Import .r2tag</button>
+        <button class="btn btn-ghost">Export Tags</button>
+        <button class="btn btn-ghost">Import or Overwrite</button>
       </div>
 
     </div>
@@ -89,14 +89,13 @@ async function loadTagNames() {
 }
 
 .app-title {
-  font-size: 26px;
+  font-size: 2em;
   font-weight: 700;
-  letter-spacing: -0.02em;
   margin-bottom: 0.125rem;
 }
 
 .app-version {
-  font-size: 11px;
+  font-size: 0.75em;
   letter-spacing: 0.1em;
   color: var(--text-muted);
 }
@@ -133,7 +132,7 @@ async function loadTagNames() {
   border-radius: var(--radius-button);
   padding: 0.625rem 0;
   border: none;
-  transition: background-color 150ms;
+  transition: background-color 250ms, box-shadow 250ms, transform 250ms;
 
   &-primary {
     background: var(--accent);
@@ -142,7 +141,8 @@ async function loadTagNames() {
     margin-bottom: 1.25rem;
 
     &:hover {
-      background: var(--accent-hover);
+      transform: translateY(-0.2em);
+      box-shadow: inset 0 0 0 1.5em var(--hover-glow);
     }
   }
 
@@ -165,14 +165,14 @@ async function loadTagNames() {
   border-radius: var(--radius-panel);
   padding: 1rem 1rem 0.25rem;
 
-  &__header {
+  &-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 0.75rem;
   }
 
-  &__label {
+  &-label {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -180,7 +180,7 @@ async function loadTagNames() {
     color: var(--text-muted);
   }
 
-  &__empty {
+  &-empty {
     text-align: center;
     border-top: 1px solid var(--line-divider);
     padding: 1.5rem 0;
