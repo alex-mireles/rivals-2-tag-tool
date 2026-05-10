@@ -2,6 +2,12 @@ use std::fs::File;
 use std::io::BufReader;
 use uesave::{Property, Save, StructValue, ValueVec};
 
+pub const DEFAULT_TAG_NAMES: [&str; 4] = ["Player1", "Player2", "Player3", "Player4"];
+
+fn is_custom_tag(name: &str) -> bool {
+    !DEFAULT_TAG_NAMES.contains(&name)
+}
+
 #[tauri::command]
 pub fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
     let file = File::open(&save_path).map_err(|error| error.to_string())?;
@@ -21,7 +27,9 @@ pub fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
     for tag_value in tag_structs {
         if let StructValue::Struct(tag_properties) = tag_value {
             if let Property::Str(name) = &tag_properties["TagName"] {
-                tag_names.push(name.clone());
+                if is_custom_tag(name) {
+                    tag_names.push(name.clone());
+                }
             }
         }
     }

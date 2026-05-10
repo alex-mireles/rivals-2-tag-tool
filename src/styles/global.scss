@@ -13,8 +13,89 @@ html, body, #app {
 
 body {
   background-color: var(--color-bg);
-  font-family: sans-serif;
-  color: #f0ecf8;
+  font-family: 'Inter Variable', sans-serif;
+}
+
+.titlebar {
+  height: 30px;
+  user-select: none;
+  display: grid;
+  grid-template-columns: auto max-content;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+.titlebar > .controls {
+  display: flex;
+}
+
+.titlebar button {
+  appearance: none;
+  padding: 0;
+  margin: 0;
+  border: none;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 30px;
+  background-color: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  transition: background 0.2s;
+}
+
+.titlebar button:hover {
+  background: rgba(255, 0, 98, 0.5);
+}
+
+.bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.bloom {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+
+  &--a {
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle at center, #5a20a8 0%, #2a0a6e 45%, transparent 70%);
+    filter: blur(70px);
+    opacity: 0.5;
+    top: -120px;
+    left: -120px;
+    animation: ocean-drift-a 2s ease-in-out infinite alternate;
+  }
+
+  &--b {
+    width: 420px;
+    height: 420px;
+    background: radial-gradient(circle at center, #1a3a9c 0%, #0d1b60 50%, transparent 70%);
+    filter: blur(70px);
+    opacity: 0.5;
+    bottom: -120px;
+    right: -120px;
+    animation: ocean-drift-b 2s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes ocean-drift-a {
+  from { transform: scale(1); }
+  to   { transform: scale(1.2); }
+}
+
+@keyframes ocean-drift-b {
+  from { transform: scale(1.2); }
+  to   { transform: scale(1); }
+}
+
+button {
+  font-family: inherit;
 }
 
 button:focus-visible {
@@ -24,7 +105,7 @@ button:focus-visible {
 
 :root {
   // Base palette
-  --color-bg: #371b64;
+  --color-bg: #0e0c24;
 
   // Surface layers
   --surface:        rgba(179, 179, 179, 0.10);
@@ -33,7 +114,7 @@ button:focus-visible {
 
   // Accent
   --accent:         rgba(99, 102, 241, 0.80);
-  --accent-hover:   rgba(255, 255, 255, 0.3);
+  --accent-hover:   rgba(132, 134, 252, 0.8);
   --accent-completed: rgba(163, 164, 231, 0.25);
 
   // Text
