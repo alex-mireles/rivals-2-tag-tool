@@ -2,9 +2,10 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-const appVersion = APP_VERSION;
-const tagNames = ref<string[]>([]);
+const appVersion = APP_VERSION; // Retrieved from package.json using vite.config.ts
 const errorMsg = ref('');
+
+const tagNames = ref<string[]>([]);
 const hasLoaded = ref(false);
 
 const TEST_SAVE_PATH =
