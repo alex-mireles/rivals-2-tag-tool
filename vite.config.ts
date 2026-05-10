@@ -1,7 +1,6 @@
 import { defineConfig } from "vite";
 import { readFileSync } from "fs";
 import vue from "@vitejs/plugin-vue";
-import UnoCSS from 'unocss/vite';
 
 const host = process.env.TAURI_DEV_HOST;
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
@@ -9,8 +8,7 @@ const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
-    vue(),
-    UnoCSS(),
+    vue()
   ],
 
   define: {

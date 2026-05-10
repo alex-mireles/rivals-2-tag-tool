@@ -19,14 +19,12 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2",
-    "@unocss/preset-wind3": "^66.6.7",
     "@vitejs/plugin-vue": "^5.2.1",
     "eslint": "^10.1.0",
     "eslint-plugin-vue": "^10.8.0",
     "globals": "^17.4.0",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.58.0",
-    "unocss": "^66.6.7",
     "vite": "^6.0.3",
     "vue-tsc": "^2.1.10"
   }

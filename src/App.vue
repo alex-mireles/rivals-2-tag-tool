@@ -2,9 +2,8 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 
-const appVersion = APP_VERSION; // Retrieved from package.json using vite.config.ts
+const appVersion = APP_VERSION;
 const errorMsg = ref('');
-
 const tagNames = ref<string[]>([]);
 const hasLoaded = ref(false);
 
@@ -28,54 +27,38 @@ async function loadTagNames() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center font-sans bg-base-800">
+  <div class="viewport">
+    <div class="card">
 
-    <div class="w-[520px] bg-surface border border-line rounded-card px-7 py-8 text-text-primary">
-
-      <div class="text-center mb-5">
-        <h1 class="text-[26px] font-bold tracking-tight text-text-primary mb-0.5">
-          Rivals 2 Tag Tool
-        </h1>
-        <span class="text-[11px] tracking-[1.5px] text-text-muted">
-          v{{ appVersion }}
-        </span>
+      <div class="card-header">
+        <h1 class="app-title">Rivals 2 Tag Tool</h1>
+        <span class="app-version">v{{ appVersion }}</span>
       </div>
 
-      <div class="flex items-center gap-2.5 bg-surface-inset rounded-button px-3.5 py-2.5 mb-5 border border-line-subtle">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="shrink-0">
+      <div class="save-path-row">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="save-path-icon">
           <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.2" />
         </svg>
-        <span class="font-mono text-[11.5px] truncate text-text-muted">
-          No save file loaded
-        </span>
+        <span class="save-path-label">No save file loaded</span>
       </div>
 
-      <button class="w-full cursor-pointer text-sm font-semibold tracking-wide transition-colors duration-150 bg-accent hover:bg-accent-hover text-white rounded-button py-2.5 mb-5 border-none">
-        Load tags from save file
+      <button class="btn btn-primary" @click="loadTagNames">
+        Load Tags from Save File
       </button>
 
-      <div class="bg-surface-inset rounded-panel px-4 pt-4 pb-1 border border-line-subtle">
-
-        <div class="flex justify-between items-baseline mb-3">
-          <span class="text-[11px] uppercase tracking-[1.5px] font-medium text-text-muted">
-            Player tags
-          </span>
+      <div class="tag-panel">
+        <div class="tag-panel-header">
+          <span class="section-label">Player tags</span>
         </div>
 
-        <div class="text-center border-t border-line-divider py-6">
-          <span class="text-sm text-text-secondary">
-            Load a save file to see tags
-          </span>
+        <div class="tag-panel-empty">
+          <span class="empty-message">Load a save file to see tags</span>
         </div>
       </div>
 
-      <div class="flex gap-2.5 mt-5">
-        <button class="flex-1 text-[13px] font-medium cursor-pointer transition-colors duration-150 bg-surface hover:bg-surface-hover text-text-secondary border border-line rounded-button py-2">
-          Export selected
-        </button>
-        <button class="flex-1 text-[13px] font-medium cursor-pointer transition-colors duration-150 bg-surface hover:bg-surface-hover text-text-secondary border border-line rounded-button py-2">
-          Import .r2tag
-        </button>
+      <div class="action-row">
+        <button class="btn btn-ghost">Export selected</button>
+        <button class="btn btn-ghost">Import .r2tag</button>
       </div>
 
     </div>
@@ -83,6 +66,7 @@ async function loadTagNames() {
 </template>
 
 <style>
+/* Global resets and base styles */
 *,
 *::before,
 *::after {
@@ -91,14 +75,184 @@ async function loadTagNames() {
   box-sizing: border-box;
 }
 
-html, body {
+html, body, #app {
   height: 100%;
   overflow: hidden;
+}
+
+body {
   background-color: #120a1f;
+  font-family: sans-serif;
+  color: #f0ecf8;
 }
 
 button:focus-visible {
   outline: 2px solid rgba(99, 102, 241, 0.6);
   outline-offset: 2px;
+}
+
+/* Design tokens — must be global for rgba compositing to work against the page background */
+:root {
+  --surface:        rgba(255, 255, 255, 0.05);
+  --surface-hover:  rgba(255, 255, 255, 0.08);
+  --surface-inset:  rgba(0, 0, 0, 0.28);
+
+  --accent:         rgba(99, 102, 241, 0.80);
+  --accent-hover:   rgba(99, 102, 241, 0.90);
+
+  --text-primary:   #f0ecf8;
+  --text-secondary: #c8b8e8;
+  --text-muted:     rgba(200, 180, 230, 0.60);
+
+  --line:           rgba(255, 255, 255, 0.08);
+  --line-subtle:    rgba(255, 255, 255, 0.04);
+  --line-divider:   rgba(255, 255, 255, 0.05);
+
+  --radius-card:    20px;
+  --radius-panel:   12px;
+  --radius-button:  10px;
+}
+</style>
+
+<style scoped>
+/* Layout */
+.viewport {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card {
+  width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 2rem 1.75rem;
+  color: var(--text-primary);
+}
+
+/* Header */
+.card-header {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.app-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.125rem;
+}
+
+.app-version {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* Save path row */
+.save-path-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--surface-inset);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-button);
+  padding: 0.625rem 0.875rem;
+  margin-bottom: 1.25rem;
+}
+
+.save-path-icon {
+  flex-shrink: 0;
+}
+
+.save-path-label {
+  font-family: monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Buttons */
+.btn {
+  width: 100%;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  border-radius: var(--radius-button);
+  padding: 0.625rem 0;
+  border: none;
+  transition: background-color 150ms;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  margin-bottom: 1.25rem;
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.btn-ghost:hover {
+  background: var(--surface-hover);
+}
+
+/* Tag panel */
+.tag-panel {
+  background: var(--surface-inset);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-panel);
+  padding: 1rem 1rem 0.25rem;
+}
+
+.tag-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.75rem;
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.tag-panel-empty {
+  text-align: center;
+  border-top: 1px solid var(--line-divider);
+  padding: 1.5rem 0;
+}
+
+.empty-message {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+/* Action row */
+.action-row {
+  display: flex;
+  gap: 0.625rem;
+  margin-top: 1.25rem;
+}
+
+.action-row .btn {
+  flex: 1;
 }
 </style>
