@@ -162,7 +162,7 @@ async function loadTagNames() {
 
       <Transition name="fade">
         <div v-if="hasLoaded && tagNames.length !== 0" class="action-row">
-          <button class="btn btn-primary">Import or Overwrite</button>
+          <button class="btn btn-primary">Import or Overwrite Tags</button>
           <button class="btn btn-primary">Export Tags</button>
         </div>
       </Transition>
