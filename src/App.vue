@@ -28,92 +28,77 @@ async function loadTagNames() {
 </script>
 
 <template>
-  <main class="container">
-    <h1>Rivals 2 Tag Tool</h1>
-    <p>Version {{ appVersion }}</p>
+  <div class="min-h-screen flex items-center justify-center font-sans bg-base-800">
 
-    <button @click="loadTagNames">Load Tag Names</button>
+    <div class="w-[520px] bg-surface border border-line rounded-card px-7 py-8 text-text-primary">
 
-    <p v-if="errorMsg" class="error">Error: {{ errorMsg }}</p>
+      <div class="text-center mb-5">
+        <h1 class="text-[26px] font-bold tracking-tight text-text-primary mb-0.5">
+          Rivals 2 Tag Tool
+        </h1>
+        <span class="text-[11px] tracking-[1.5px] text-text-muted">
+          v{{ appVersion }}
+        </span>
+      </div>
 
-    <div v-if="hasLoaded">
-      <p>Found {{ tagNames.length }} tag(s):</p>
-      <ul>
-        <li v-for="name in tagNames" :key="name">{{ name }}</li>
-      </ul>
+      <div class="flex items-center gap-2.5 bg-surface-inset rounded-button px-3.5 py-2.5 mb-5 border border-line-subtle">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="shrink-0">
+          <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.2" />
+        </svg>
+        <span class="font-mono text-[11.5px] truncate text-text-muted">
+          No save file loaded
+        </span>
+      </div>
+
+      <button class="w-full cursor-pointer text-sm font-semibold tracking-wide transition-colors duration-150 bg-accent hover:bg-accent-hover text-white rounded-button py-2.5 mb-5 border-none">
+        Load tags from save file
+      </button>
+
+      <div class="bg-surface-inset rounded-panel px-4 pt-4 pb-1 border border-line-subtle">
+
+        <div class="flex justify-between items-baseline mb-3">
+          <span class="text-[11px] uppercase tracking-[1.5px] font-medium text-text-muted">
+            Player tags
+          </span>
+        </div>
+
+        <div class="text-center border-t border-line-divider py-6">
+          <span class="text-sm text-text-secondary">
+            Load a save file to see tags
+          </span>
+        </div>
+      </div>
+
+      <div class="flex gap-2.5 mt-5">
+        <button class="flex-1 text-[13px] font-medium cursor-pointer transition-colors duration-150 bg-surface hover:bg-surface-hover text-text-secondary border border-line rounded-button py-2">
+          Export selected
+        </button>
+        <button class="flex-1 text-[13px] font-medium cursor-pointer transition-colors duration-150 bg-surface hover:bg-surface-hover text-text-secondary border border-line rounded-button py-2">
+          Import .r2tag
+        </button>
+      </div>
+
     </div>
-  </main>
+  </div>
 </template>
 
-<style scoped>
-.error {
-  color: #ff6b6b;
-}
-
-ul {
-  list-style: none;
-  padding: 0;
-}
-
-li {
-  padding: 0.3em 0;
-}
-</style>
-
 <style>
-:root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #f6f6f6;
-  background-color: #2f2f2f;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-}
-
-.container {
+*,
+*::before,
+*::after {
   margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #ffffff;
-  background-color: #0f0f0f98;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-  cursor: pointer;
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background-color: #120a1f;
 }
 
-button:hover {
-  border-color: #396cd8;
-}
-
-button:active {
-  border-color: #396cd8;
-  background-color: #0f0f0f69;
-}
-
-button {
-  outline: none;
-}
-
-h1 {
-  text-align: center;
+button:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.6);
+  outline-offset: 2px;
 }
 </style>
