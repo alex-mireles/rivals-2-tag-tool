@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import './styles/global.scss';
 
 const appVersion = APP_VERSION;
 const errorMsg = ref('');
@@ -43,16 +44,16 @@ async function loadTagNames() {
       </div>
 
       <button class="btn btn-primary" @click="loadTagNames">
-        Load Tags from Save File
+        Load tags from save file
       </button>
 
       <div class="tag-panel">
-        <div class="tag-panel-header">
-          <span class="section-label">Player tags</span>
+        <div class="tag-panel__header">
+          <span class="tag-panel__label">Player tags</span>
         </div>
 
-        <div class="tag-panel-empty">
-          <span class="empty-message">Load a save file to see tags</span>
+        <div class="tag-panel__empty">
+          <span class="tag-panel__empty-message">Load a save file to see tags</span>
         </div>
       </div>
 
@@ -65,57 +66,7 @@ async function loadTagNames() {
   </div>
 </template>
 
-<style>
-/* Global resets and base styles */
-*,
-*::before,
-*::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body, #app {
-  height: 100%;
-  overflow: hidden;
-}
-
-body {
-  background-color: #120a1f;
-  font-family: sans-serif;
-  color: #f0ecf8;
-}
-
-button:focus-visible {
-  outline: 2px solid rgba(99, 102, 241, 0.6);
-  outline-offset: 2px;
-}
-
-/* Design tokens — must be global for rgba compositing to work against the page background */
-:root {
-  --surface:        rgba(255, 255, 255, 0.05);
-  --surface-hover:  rgba(255, 255, 255, 0.08);
-  --surface-inset:  rgba(0, 0, 0, 0.28);
-
-  --accent:         rgba(99, 102, 241, 0.80);
-  --accent-hover:   rgba(99, 102, 241, 0.90);
-
-  --text-primary:   #f0ecf8;
-  --text-secondary: #c8b8e8;
-  --text-muted:     rgba(200, 180, 230, 0.60);
-
-  --line:           rgba(255, 255, 255, 0.08);
-  --line-subtle:    rgba(255, 255, 255, 0.04);
-  --line-divider:   rgba(255, 255, 255, 0.05);
-
-  --radius-card:    20px;
-  --radius-panel:   12px;
-  --radius-button:  10px;
-}
-</style>
-
-<style scoped>
-/* Layout */
+<style scoped lang="scss">
 .viewport {
   min-height: 100vh;
   display: flex;
@@ -130,12 +81,11 @@ button:focus-visible {
   border-radius: var(--radius-card);
   padding: 2rem 1.75rem;
   color: var(--text-primary);
-}
 
-/* Header */
-.card-header {
-  text-align: center;
-  margin-bottom: 1.25rem;
+  &-header {
+    text-align: center;
+    margin-bottom: 1.25rem;
+  }
 }
 
 .app-title {
@@ -151,7 +101,6 @@ button:focus-visible {
   color: var(--text-muted);
 }
 
-/* Save path row */
 .save-path-row {
   display: flex;
   align-items: center;
@@ -176,83 +125,80 @@ button:focus-visible {
   text-overflow: ellipsis;
 }
 
-/* Buttons */
 .btn {
   width: 100%;
   cursor: pointer;
-  font-size: 0.875rem;
   font-weight: 600;
   letter-spacing: 0.025em;
   border-radius: var(--radius-button);
   padding: 0.625rem 0;
   border: none;
   transition: background-color 150ms;
+
+  &-primary {
+    background: var(--accent);
+    color: white;
+    font-size: 0.875rem;
+    margin-bottom: 1.25rem;
+
+    &:hover {
+      background: var(--accent-hover);
+    }
+  }
+
+  &-ghost {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border: 1px solid var(--line);
+    font-size: 13px;
+    font-weight: 500;
+
+    &:hover {
+      background: var(--surface-hover);
+    }
+  }
 }
 
-.btn-primary {
-  background: var(--accent);
-  color: white;
-  margin-bottom: 1.25rem;
-}
-
-.btn-primary:hover {
-  background: var(--accent-hover);
-}
-
-.btn-ghost {
-  background: var(--surface);
-  color: var(--text-secondary);
-  border: 1px solid var(--line);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.btn-ghost:hover {
-  background: var(--surface-hover);
-}
-
-/* Tag panel */
 .tag-panel {
   background: var(--surface-inset);
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-panel);
   padding: 1rem 1rem 0.25rem;
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.75rem;
+  }
+
+  &__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  &__empty {
+    text-align: center;
+    border-top: 1px solid var(--line-divider);
+    padding: 1.5rem 0;
+
+    &-message {
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+    }
+  }
 }
 
-.tag-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 0.75rem;
-}
-
-.section-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-.tag-panel-empty {
-  text-align: center;
-  border-top: 1px solid var(--line-divider);
-  padding: 1.5rem 0;
-}
-
-.empty-message {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-}
-
-/* Action row */
 .action-row {
   display: flex;
   gap: 0.625rem;
   margin-top: 1.25rem;
-}
 
-.action-row .btn {
-  flex: 1;
+  .btn {
+    flex: 1;
+  }
 }
 </style>

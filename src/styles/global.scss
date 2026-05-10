@@ -1,0 +1,52 @@
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background-color: #120a1f;
+  font-family: sans-serif;
+  color: #f0ecf8;
+}
+
+button:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.6);
+  outline-offset: 2px;
+}
+
+:root {
+  // Base palette
+  --color-bg: #120a1f;
+
+  // Surface layers
+  --surface:        rgba(255, 255, 255, 0.05);
+  --surface-hover:  rgba(255, 255, 255, 0.08);
+  --surface-inset:  rgba(0, 0, 0, 0.28);
+
+  // Accent
+  --accent:         rgba(99, 102, 241, 0.80);
+  --accent-hover:   rgba(99, 102, 241, 0.90);
+
+  // Text
+  --text-primary:   #f0ecf8;
+  --text-secondary: #c8b8e8;
+  --text-muted:     rgba(200, 180, 230, 0.60);
+
+  // Borders
+  --line:           rgba(255, 255, 255, 0.08);
+  --line-subtle:    rgba(255, 255, 255, 0.04);
+  --line-divider:   rgba(255, 255, 255, 0.05);
+
+  // Border radii
+  --radius-card:    20px;
+  --radius-panel:   12px;
+  --radius-button:  10px;
+}
