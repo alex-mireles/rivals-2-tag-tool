@@ -24,21 +24,24 @@ button:focus-visible {
 
 :root {
   // Base palette
-  --color-bg: #1f1f1f;
+  --color-bg: #371b64;
 
   // Surface layers
-  --surface:        rgba(255, 255, 255, 0.08);
+  --surface:        rgba(179, 179, 179, 0.10);
   --surface-hover:  rgba(255, 255, 255, 0.15);
   --surface-inset:  rgba(0, 0, 0, 0.28);
 
   // Accent
   --accent:         rgba(99, 102, 241, 0.80);
   --accent-hover:   rgba(255, 255, 255, 0.3);
+  --accent-completed: rgba(163, 164, 231, 0.25);
 
   // Text
   --text-primary:   #ffffff;
   --text-secondary: #ffffff;
   --text-muted:     rgba(255, 255, 255, 0.6);
+  --text-success:   #00ffaa;
+  --text-failure:   #f87171;
 
   // Borders
   --line:           rgba(255, 255, 255, 0.08);
