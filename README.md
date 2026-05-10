@@ -14,36 +14,18 @@ Export your custom player tag and controls to a `.r2tag` file, then send it to y
 **Tournament Organizers:**
 Gather all of your entrants' `.r2tag` files, and import them directly into your setups with a simple `.exe` on a USB stick.
 
-## Requirements for building from source
+## Requirements
 
-- Windows
-- Python 3.12+
-- `uesave.exe`, placed in the same folder as the script
+This section is a WIP.
+
+Requirements:
+- uesave
 
 ### Getting uesave
 
 Download the latest Windows release from: https://github.com/trumank/uesave-rs/releases
 
-Grab `uesave-x86_64-pc-windows-msvc.zip`, extract `uesave.exe`, and place
-it in the same directory as `rivals_tag_tool.py`.
-
-## Building from source
-
-1. Install PyInstaller with pip:
-   ```
-   pip install pyinstaller
-   ```
-
-2. Place `uesave.exe` in the same directory as `rivals_tag_tool.spec` and `rivals_tag_tool.py`.
-
-3. Build the `.exe` with the following command:
-   ```
-   pyinstaller rivals_tag_tool.spec
-   ```
-
-4. Find the output at `dist/Rivals2TagTool.exe`
-
-Copy `Rivals2TagTool.exe` to a USB or drop it on any venue PC.
+Grab `uesave-x86_64-pc-windows-msvc.zip`, extract `uesave.exe`, and place it in the project directory.
 
 ## FAQ
 
