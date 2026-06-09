@@ -9,6 +9,39 @@ fn is_custom_tag(name: &str) -> bool {
     !DEFAULT_TAG_NAMES.contains(&name)
 }
 
+/// Windows reserved device names that cannot be used as a file stem.
+const RESERVED_FILE_NAMES: [&str; 22] = [
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Make a tag name safe to use as a file stem on both Windows and macOS.
+fn sanitize_file_stem(name: &str) -> String {
+    let mut stem: String = name
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if (c as u32) < 0x20 => '_',
+            c => c,
+        })
+        .collect();
+
+    // Windows rejects file names ending in a dot or space.
+    while stem.ends_with('.') || stem.ends_with(' ') {
+        stem.pop();
+    }
+
+    if RESERVED_FILE_NAMES.contains(&stem.to_ascii_uppercase().as_str()) {
+        stem.insert(0, '_');
+    }
+
+    if stem.is_empty() {
+        stem = "tag".into();
+    }
+
+    stem
+}
+
 fn tag_name_of(sv: &StructValue) -> Option<&str> {
     if let StructValue::Struct(props) = sv {
         if let Some(Property::Str(name)) = props.0.get(&PropertyKey::from("TagName")) {
@@ -54,6 +87,7 @@ pub async fn export_tags(
 ) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut written = Vec::new();
+        let mut used_stems = std::collections::HashSet::new();
 
         for tag_name in &tag_names {
             let file = File::open(&save_path).map_err(|e| e.to_string())?;
@@ -68,7 +102,17 @@ pub async fn export_tags(
                 return Err("SavedPlayerTags is not a struct array".into());
             }
 
-            let out_path = std::path::Path::new(&output_dir).join(format!("{}.r2tag", tag_name));
+            // Distinct tag names can collide after sanitizing (e.g. "a/b" and "a:b");
+            // suffix a counter so one export doesn't overwrite another.
+            let base_stem = sanitize_file_stem(tag_name);
+            let mut stem = base_stem.clone();
+            let mut counter = 1;
+            while !used_stems.insert(stem.clone()) {
+                stem = format!("{base_stem} ({counter})");
+                counter += 1;
+            }
+
+            let out_path = std::path::Path::new(&output_dir).join(format!("{stem}.r2tag"));
             let mut out_file = File::create(&out_path).map_err(|e| e.to_string())?;
             save.write(&mut out_file).map_err(|e| e.to_string())?;
             written.push(out_path.to_string_lossy().to_string());
@@ -197,4 +241,38 @@ pub async fn import_tags(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitize_file_stem;
+
+    #[test]
+    fn replaces_path_separators_and_reserved_chars() {
+        assert_eq!(sanitize_file_stem("test/lower"), "test_lower");
+        assert_eq!(sanitize_file_stem(r"back\slash"), "back_slash");
+        assert_eq!(sanitize_file_stem("a:b*c?d\"e<f>g|h"), "a_b_c_d_e_f_g_h");
+    }
+
+    #[test]
+    fn trims_trailing_dots_and_spaces() {
+        assert_eq!(sanitize_file_stem("name. . "), "name");
+    }
+
+    #[test]
+    fn prefixes_windows_reserved_names() {
+        assert_eq!(sanitize_file_stem("CON"), "_CON");
+        assert_eq!(sanitize_file_stem("com1"), "_com1");
+    }
+
+    #[test]
+    fn falls_back_when_nothing_survives() {
+        assert_eq!(sanitize_file_stem("..."), "tag");
+        assert_eq!(sanitize_file_stem(""), "tag");
+    }
+
+    #[test]
+    fn leaves_ordinary_names_untouched() {
+        assert_eq!(sanitize_file_stem("Player Tag_42"), "Player Tag_42");
+    }
 }
