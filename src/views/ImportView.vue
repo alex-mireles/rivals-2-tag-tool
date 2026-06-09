@@ -2,6 +2,7 @@
 import { ref, computed, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 
@@ -103,94 +104,92 @@ function reset() {
 </script>
 
 <template>
-  <div class="card">
+  <AnimatedCard>
     <ViewHeader title="Import Tags" @go-back="emit('go-back')" />
 
     <SavePathBar :label="savePath" />
 
-    <!-- Result panel -->
-    <template v-if="result">
-      <div class="result-panel">
-        <div v-if="result.imported.length > 0" class="result-section result-section--success">
-          <span class="result-section-label">Imported ({{ result.imported.length }})</span>
-          <ul class="result-list">
-            <li v-for="name in result.imported" :key="name" class="result-list-item result-list-item--imported">
-              {{ name }}
-            </li>
-          </ul>
+    <Transition name="content-swap" mode="out-in">
+      <!-- Result panel -->
+      <div v-if="result" key="result" class="view-stack">
+        <div class="result-panel">
+          <div v-if="result.imported.length > 0" class="result-section result-section--success">
+            <span class="result-section-label">Imported ({{ result.imported.length }})</span>
+            <ul class="result-list">
+              <li v-for="name in result.imported" :key="name" class="result-list-item result-list-item--imported">
+                {{ name }}
+              </li>
+            </ul>
+          </div>
+          <div v-if="result.skipped.length > 0" class="result-section">
+            <span class="result-section-label">Skipped ({{ result.skipped.length }})</span>
+            <ul class="result-list">
+              <li v-for="name in result.skipped" :key="name" class="result-list-item result-list-item--skipped">
+                {{ name }}
+              </li>
+            </ul>
+          </div>
         </div>
-        <div v-if="result.skipped.length > 0" class="result-section">
-          <span class="result-section-label">Skipped ({{ result.skipped.length }})</span>
-          <ul class="result-list">
-            <li v-for="name in result.skipped" :key="name" class="result-list-item result-list-item--skipped">
-              {{ name }}
-            </li>
-          </ul>
-        </div>
+        <button class="btn btn-primary" @click="reset">Import More</button>
       </div>
-      <button class="btn btn-primary" @click="reset">Import More</button>
-    </template>
 
-    <!-- Loading: reading .r2tag previews -->
-    <template v-else-if="isLoading">
-      <div class="loading-panel">Reading tag files...</div>
-    </template>
+      <!-- Loading: reading .r2tag previews -->
+      <div v-else-if="isLoading" key="reading" class="loading-panel">Reading tag files...</div>
 
-    <!-- Loading: writing to save -->
-    <template v-else-if="isImporting">
-      <div class="loading-panel">Writing to save file...</div>
-    </template>
+      <!-- Loading: writing to save -->
+      <div v-else-if="isImporting" key="writing" class="loading-panel">Writing to save file...</div>
 
-    <!-- Import UI -->
-    <template v-else>
-      <button class="btn btn-primary" @click="chooseFiles">
-        Choose .r2tag Files
-      </button>
+      <!-- Import UI -->
+      <div v-else key="import" class="view-stack">
+        <button class="btn btn-primary" @click="chooseFiles">
+          Choose .r2tag Files
+        </button>
 
-      <template v-if="previews.length > 0">
-        <div class="tag-panel">
-          <div class="tag-panel-header">
-            <span class="tag-panel-label">Tags to Import</span>
-            <span v-if="hasConflicts" class="conflict-badge">
-              {{ conflictNames.size }} conflict{{ conflictNames.size === 1 ? '' : 's' }}
-            </span>
+        <template v-if="previews.length > 0">
+          <div class="tag-panel">
+            <div class="tag-panel-header">
+              <span class="tag-panel-label">Tags to Import</span>
+              <span v-if="hasConflicts" class="conflict-badge">
+                {{ conflictNames.size }} conflict{{ conflictNames.size === 1 ? '' : 's' }}
+              </span>
+            </div>
+
+            <ul class="tag-list">
+              <li v-for="preview in previews" :key="preview.path" class="tag-row">
+                <div class="tag-info">
+                  <span class="tag-name">{{ preview.tag_name }}</span>
+                  <span class="tag-source">{{ preview.path.split(/[\\/]/).pop() }}</span>
+                </div>
+
+                <div v-if="conflictNames.has(preview.tag_name)" class="conflict-toggle">
+                  <button
+                    class="toggle-btn"
+                    :class="{ 'toggle-btn--overwrite': overwriteSet.has(preview.tag_name) }"
+                    @click="toggleOverwrite(preview.tag_name)"
+                  >
+                    {{ overwriteSet.has(preview.tag_name) ? 'Overwrite' : 'Skip' }}
+                  </button>
+                </div>
+                <div v-else class="no-conflict-badge">New</div>
+              </li>
+            </ul>
           </div>
 
-          <ul class="tag-list">
-            <li v-for="preview in previews" :key="preview.path" class="tag-row">
-              <div class="tag-info">
-                <span class="tag-name">{{ preview.tag_name }}</span>
-                <span class="tag-source">{{ preview.path.split(/[\\/]/).pop() }}</span>
-              </div>
+          <div v-if="hasConflicts" class="conflict-hint">
+            Conflicting tags default to <strong>Skip</strong>. Toggle each one to overwrite instead.
+          </div>
+        </template>
 
-              <div v-if="conflictNames.has(preview.tag_name)" class="conflict-toggle">
-                <button
-                  class="toggle-btn"
-                  :class="{ 'toggle-btn--overwrite': overwriteSet.has(preview.tag_name) }"
-                  @click="toggleOverwrite(preview.tag_name)"
-                >
-                  {{ overwriteSet.has(preview.tag_name) ? 'Overwrite' : 'Skip' }}
-                </button>
-              </div>
-              <div v-else class="no-conflict-badge">New</div>
-            </li>
-          </ul>
+        <div v-else-if="!errorMsg" class="empty-hint">
+          Choose one or more <code>.r2tag</code> files to import into your save.
         </div>
 
-        <div v-if="hasConflicts" class="conflict-hint">
-          Conflicting tags default to <strong>Skip</strong>. Toggle each one to overwrite instead.
-        </div>
-      </template>
+        <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
 
-      <div v-else-if="!errorMsg" class="empty-hint">
-        Choose one or more <code>.r2tag</code> files to import into your save.
+        <button v-if="previews.length > 0" class="btn btn-primary" @click="doImport">Import</button>
       </div>
-
-      <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
-
-      <button v-if="previews.length > 0" class="btn btn-primary" @click="doImport">Import</button>
-    </template>
-  </div>
+    </Transition>
+  </AnimatedCard>
 </template>
 
 <style scoped lang="scss">

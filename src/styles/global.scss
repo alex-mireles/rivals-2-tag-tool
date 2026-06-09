@@ -131,17 +131,43 @@ button:focus-visible {
   overflow: hidden;
 }
 
+// Shell rendered by AnimatedCard.vue; its inline height tracks .card-content.
 .card {
   width: 500px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  color: var(--text-primary);
+  transition: height 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.card-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 1.5rem;
   gap: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  color: var(--text-primary);
+}
+
+// A swappable block inside the card; mirrors the card-content column layout.
+.view-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+// Cross-fade for content swapped inside the card; the card animates the height.
+.content-swap-enter-active,
+.content-swap-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.content-swap-enter-from,
+.content-swap-leave-to {
+  opacity: 0;
 }
 
 .btn {

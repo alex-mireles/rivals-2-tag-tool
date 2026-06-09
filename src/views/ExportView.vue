@@ -2,6 +2,7 @@
 import { ref, computed, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 
@@ -70,69 +71,69 @@ function reset() {
 </script>
 
 <template>
-  <div class="card">
+  <AnimatedCard>
     <ViewHeader title="Export Tags" @go-back="emit('go-back')" />
 
     <SavePathBar :label="savePath" />
 
-    <!-- Success result panel -->
-    <template v-if="result">
-      <div class="result-panel result-panel--success">
-        <span class="result-panel-msg">
-          Exported {{ result.exported.length }} tag{{ result.exported.length === 1 ? '' : 's' }} to
-          <span class="result-panel-path">{{ result.outputDir }}</span>
-        </span>
-        <ul class="result-list">
-          <li v-for="path in result.exported" :key="path" class="result-list-item">
-            {{ path.split(/[\\/]/).pop() }}
-          </li>
-        </ul>
-      </div>
-      <button class="btn btn-primary" @click="reset">Export More</button>
-    </template>
-
-    <!-- Loading state -->
-    <template v-else-if="isExporting">
-      <div class="loading-panel">Writing .r2tag files...</div>
-    </template>
-
-    <!-- Selection UI -->
-    <template v-else>
-      <div class="tag-panel">
-        <div class="tag-panel-header">
-          <span class="tag-panel-label">Select Tags to Export</span>
-          <button class="select-all-btn" @click="toggleAll">
-            {{ allSelected ? 'Deselect All' : 'Select All' }}
-          </button>
+    <Transition name="content-swap" mode="out-in">
+      <!-- Success result panel -->
+      <div v-if="result" key="result" class="view-stack">
+        <div class="result-panel result-panel--success">
+          <span class="result-panel-msg">
+            Exported {{ result.exported.length }} tag{{ result.exported.length === 1 ? '' : 's' }} to
+            <span class="result-panel-path">{{ result.outputDir }}</span>
+          </span>
+          <ul class="result-list">
+            <li v-for="path in result.exported" :key="path" class="result-list-item">
+              {{ path.split(/[\\/]/).pop() }}
+            </li>
+          </ul>
         </div>
-        <ul class="tag-list">
-          <li
-            v-for="name in tagNames"
-            :key="name"
-            class="tag-row tag-row--selectable"
-            @click="toggleTag(name)"
-          >
-            <div class="tag-checkbox" :class="{ 'tag-checkbox--checked': selected.has(name) }">
-              <svg v-if="selected.has(name)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-              </svg>
-            </div>
-            <span class="tag-name">{{ name }}</span>
-          </li>
-        </ul>
+        <button class="btn btn-primary" @click="reset">Export More</button>
       </div>
 
-      <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+      <!-- Loading state -->
+      <div v-else-if="isExporting" key="loading" class="loading-panel">Writing .r2tag files...</div>
 
-      <button
-        class="btn btn-primary"
-        :disabled="selected.size === 0"
-        @click="exportSelected"
-      >
-        Export {{ selected.size > 0 ? selected.size : '' }} Selected Tag{{ selected.size === 1 ? '' : 's' }}
-      </button>
-    </template>
-  </div>
+      <!-- Selection UI -->
+      <div v-else key="select" class="view-stack">
+        <div class="tag-panel">
+          <div class="tag-panel-header">
+            <span class="tag-panel-label">Select Tags to Export</span>
+            <button class="select-all-btn" @click="toggleAll">
+              {{ allSelected ? 'Deselect All' : 'Select All' }}
+            </button>
+          </div>
+          <ul class="tag-list">
+            <li
+              v-for="name in tagNames"
+              :key="name"
+              class="tag-row tag-row--selectable"
+              @click="toggleTag(name)"
+            >
+              <div class="tag-checkbox" :class="{ 'tag-checkbox--checked': selected.has(name) }">
+                <svg v-if="selected.has(name)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+                  <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+              </div>
+              <span class="tag-name">{{ name }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+
+        <button
+          class="btn btn-primary"
+          :disabled="selected.size === 0"
+          @click="exportSelected"
+        >
+          Export {{ selected.size > 0 ? selected.size : '' }} Selected Tag{{ selected.size === 1 ? '' : 's' }}
+        </button>
+      </div>
+    </Transition>
+  </AnimatedCard>
 </template>
 
 <style scoped lang="scss">

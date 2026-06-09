@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import type { SaveFileState } from '../types';
 
@@ -90,7 +91,7 @@ async function loadTagNames() {
 </script>
 
 <template>
-  <div class="card">
+  <AnimatedCard>
     <div class="card-header">
       <h1 class="app-title">Rivals II Tag Tool</h1>
       <span class="app-version">v{{ appVersion }}</span>
@@ -122,33 +123,35 @@ async function loadTagNames() {
       </Transition>
     </div>
 
-    <div v-if="isLoading" class="loading-panel">Reading save file...</div>
+    <Transition name="content-swap" mode="out-in">
+      <div v-if="isLoading" key="loading" class="loading-panel">Reading save file...</div>
 
-    <div v-else class="tag-panel">
-      <div class="tag-panel-header">
-        <span class="tag-panel-label">Player Tags</span>
-        <Transition name="tag-count-fade">
-          <span v-if="hasLoaded" class="tag-panel-count">{{ tagNames.length }} tags found</span>
+      <div v-else key="panel" class="tag-panel">
+        <div class="tag-panel-header">
+          <span class="tag-panel-label">Player Tags</span>
+          <Transition name="tag-count-fade">
+            <span v-if="hasLoaded" class="tag-panel-count">{{ tagNames.length }} tags found</span>
+          </Transition>
+        </div>
+
+        <Transition name="expand" mode="out-in">
+          <template v-if="hasLoaded">
+            <div v-if="tagNames.length === 0" class="tag-panel-empty">
+              <span class="tag-panel-empty-message">No custom tags found in file</span>
+            </div>
+            <ul v-else class="tag-list">
+              <li v-for="name in tagNames" :key="name" class="tag-row">
+                <span class="tag-name">{{ name }}</span>
+              </li>
+            </ul>
+          </template>
+
+          <div v-else class="tag-panel-empty">
+            <span class="tag-panel-empty-message">no player tags currently loaded</span>
+          </div>
         </Transition>
       </div>
-
-      <Transition name="expand" mode="out-in">
-        <template v-if="hasLoaded">
-          <div v-if="tagNames.length === 0" class="tag-panel-empty">
-            <span class="tag-panel-empty-message">No custom tags found in file</span>
-          </div>
-          <ul v-else class="tag-list">
-            <li v-for="name in tagNames" :key="name" class="tag-row">
-              <span class="tag-name">{{ name }}</span>
-            </li>
-          </ul>
-        </template>
-
-        <div v-else class="tag-panel-empty">
-          <span class="tag-panel-empty-message">no player tags currently loaded</span>
-        </div>
-      </Transition>
-    </div>
+    </Transition>
 
     <Transition name="fade">
       <div v-if="hasLoaded && tagNames.length !== 0" class="action-row">
@@ -160,7 +163,7 @@ async function loadTagNames() {
         </button>
       </div>
     </Transition>
-  </div>
+  </AnimatedCard>
 </template>
 
 <style scoped lang="scss">
@@ -253,24 +256,15 @@ async function loadTagNames() {
   }
 }
 
+// Opacity only — the card itself animates the height change.
 .expand-enter-active,
 .expand-leave-active {
-  transition: opacity 0.3s ease, max-height 0.5s ease;
-  overflow: hidden;
-  flex: 1;
+  transition: opacity 0.25s ease;
 }
 
 .expand-enter-from,
 .expand-leave-to {
   opacity: 0;
-  max-height: 0;
-}
-
-.expand-enter-to,
-.expand-leave-from {
-  opacity: 1;
-  max-height: 10rem;
-  flex: 1;
 }
 
 .tag-count-fade-enter-active {
@@ -309,27 +303,14 @@ async function loadTagNames() {
   margin-left: 0.625rem;
 }
 
-.fade-enter-active {
-  transition: opacity 0.3s ease, max-height 0.5s ease, margin-top 0.5s ease, padding-top 0.5s ease;
-  overflow: hidden;
-}
-
+// Opacity only — the card itself animates the height change.
+.fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease, max-height 0.5s ease, margin-top 0.5s ease, padding-top 0.5s ease;
-  overflow: hidden;
+  transition: opacity 0.3s ease;
 }
 
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-  max-height: 0;
-  margin-top: 0;
-  padding-top: 0;
-}
-
-.fade-enter-to,
-.fade-leave-from {
-  opacity: 1;
-  max-height: 3rem;
 }
 </style>
