@@ -11,9 +11,9 @@ importers:
       '@fontsource-variable/inter':
         specifier: ^5.2.8
         version: 5.2.8
-      '@fontsource/source-code-pro':
-        specifier: ^5.2.7
-        version: 5.2.7
+      '@fontsource-variable/ubuntu-sans-mono':
+        specifier: ^5.2.10
+        version: 5.2.10
       '@tauri-apps/api':
         specifier: ^2
         version: 2.10.1
@@ -281,8 +281,8 @@ packages:
   '@fontsource-variable/inter@5.2.8':
     resolution: {integrity: sha512-kOfP2D+ykbcX/P3IFnokOhVRNoTozo5/JxhAIVYLpea/UBmCQ/YWPBfWIDuBImXX/15KH+eKh4xpEUyS2sQQGQ==}
 
-  '@fontsource/source-code-pro@5.2.7':
-    resolution: {integrity: sha512-7papq9TH94KT+S5VSY8cU7tFmwuGkIe3qxXRMscuAXH6AjMU+KJI75f28FzgBVDrlMfA0jjlTV4/x5+H5o/5EQ==}
+  '@fontsource-variable/ubuntu-sans-mono@5.2.10':
+    resolution: {integrity: sha512-9oUR9qQPz0pyxb8GsbkiZwGj7ABsAtbgkkxcg0prOsvRk/nZhdfv23qpkG++T1Jo5DVQVfumRLBgPbNdmGT/1g==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -1333,7 +1333,7 @@ snapshots:
 
   '@fontsource-variable/inter@5.2.8': {}
 
-  '@fontsource/source-code-pro@5.2.7': {}
+  '@fontsource-variable/ubuntu-sans-mono@5.2.10': {}
 
   '@humanfs/core@0.19.1': {}
 

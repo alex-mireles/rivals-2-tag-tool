@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import SavePathBar from '../components/SavePathBar.vue';
 
 const EXPECTED_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
 const appVersion = APP_VERSION;
@@ -74,6 +75,12 @@ const savePathDisplay = computed(() => {
   return savePath.value;
 });
 
+const savePathStatus = computed(() => {
+  if (!savePath.value) return 'idle' as const;
+  if (savePathError.value) return 'error' as const;
+  return 'success' as const;
+});
+
 async function loadTagNames() {
   errorMsg.value = '';
   tagNames.value = [];
@@ -101,17 +108,7 @@ async function loadTagNames() {
       <span class="app-version">v{{ appVersion }}</span>
     </div>
 
-    <div class="save-path-row">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="save-path-icon">
-        <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.5" />
-      </svg>
-      <div
-        class="save-path-label"
-        :class="{ 'save-path-label-error': savePathError, 'save-path-label-success': savePath && !savePathError }"
-      >
-        {{ savePathDisplay }}
-      </div>
-    </div>
+    <SavePathBar :label="savePathDisplay" :status="savePathStatus" />
 
     <div class="button-row">
       <button
@@ -194,36 +191,6 @@ async function loadTagNames() {
   color: var(--text-muted);
 }
 
-.save-path-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  background: var(--surface-inset);
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-button);
-  padding: 0.7em 1em;
-  gap: 0.7em;
-}
-
-.save-path-icon {
-  flex-shrink: 0;
-}
-
-.save-path-label {
-  font-family: 'Source Code Pro', monospace;
-  font-size: 0.9em;
-  min-width: 0;
-  color: var(--text-muted);
-  word-break: break-all;
-
-  &-success {
-    color: var(--text-success);
-  }
-
-  &-error {
-    color: var(--text-failure);
-  }
-}
 
 .tag-panel {
   display: flex;

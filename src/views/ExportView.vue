@@ -80,7 +80,7 @@ function reset() {
       <span class="card-view-header-title">Export Tags</span>
     </div>
 
-    <SavePathBar :save-path="savePath" />
+    <SavePathBar :label="savePath" />
 
     <!-- Success result panel -->
     <template v-if="result">
@@ -261,7 +261,7 @@ function reset() {
   }
 
   &-path {
-    font-family: 'Source Code Pro', monospace;
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
     word-break: break-all;
   }
 }

@@ -186,7 +186,7 @@ button:focus-visible {
 
   &-title {
     text-align: center;
-    font-size: 1.1em;
+    font-size: 1.3em;
     font-weight: 700;
     letter-spacing: 0.02em;
   }
@@ -219,14 +219,15 @@ button:focus-visible {
   gap: 0.2em;
 
   &-item {
-    font-family: 'Source Code Pro', monospace;
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
   }
 }
 
 .tag-name {
-  font-family: 'Source Code Pro', monospace;
+  font-family: 'Ubuntu Sans Mono Variable', monospace;
+  letter-spacing: 0.02em;
   font-size: 1.5em;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-secondary);
 }
 

@@ -112,7 +112,7 @@ function reset() {
       <span class="card-view-header-title">Import Tags</span>
     </div>
 
-    <SavePathBar :save-path="savePath" />
+    <SavePathBar :label="savePath" />
 
     <!-- Result panel -->
     <template v-if="result">
@@ -272,7 +272,7 @@ function reset() {
 }
 
 .tag-source {
-  font-family: 'Source Code Pro', monospace;
+  font-family: 'Ubuntu Sans Mono Variable', monospace;
   font-size: 0.85em;
   color: var(--text-muted);
   overflow: hidden;
@@ -328,7 +328,7 @@ function reset() {
   padding: 1em;
 
   code {
-    font-family: 'Source Code Pro', monospace;
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
     background: var(--surface-inset);
     padding: 0.1em 0.3em;
     border-radius: 3px;

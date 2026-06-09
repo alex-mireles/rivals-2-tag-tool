@@ -1,5 +1,8 @@
 <script setup lang="ts">
-defineProps<{ savePath: string }>();
+defineProps<{
+  label: string;
+  status?: 'idle' | 'error' | 'success';
+}>();
 </script>
 
 <template>
@@ -7,7 +10,7 @@ defineProps<{ savePath: string }>();
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="save-path-bar-icon" aria-hidden="true">
       <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.5" />
     </svg>
-    <span class="save-path-bar-label">{{ savePath }}</span>
+    <span class="save-path-bar-label" :class="`save-path-bar-label--${status ?? 'success'}`">{{ label }}</span>
   </div>
 </template>
 
@@ -28,13 +31,16 @@ defineProps<{ savePath: string }>();
   }
 
   &-label {
-    font-family: 'Source Code Pro', monospace;
-    font-size: 0.8em;
-    color: var(--text-success);
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
+    font-size: 0.7em;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    &--idle    { color: var(--text-muted); }
+    &--error   { color: var(--text-failure); }
+    &--success { color: var(--text-success); }
   }
 }
 </style>
