@@ -4,6 +4,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import LoadView from './views/LoadView.vue';
 import ExportView from './views/ExportView.vue';
 import ImportView from './views/ImportView.vue';
+import type { SaveFileState } from './types';
 
 const appWindow = getCurrentWindow();
 
@@ -12,14 +13,7 @@ type ViewName = 'load' | 'export' | 'import';
 const currentView = ref<ViewName>('load');
 const transitionName = ref('slide-forward');
 
-interface LoadViewState {
-  savePath: string;
-  savePathError: boolean;
-  tagNames: string[];
-  hasLoaded: boolean;
-}
-
-const loadViewState = ref<LoadViewState>({
+const saveFileState = ref<SaveFileState>({
   savePath: '',
   savePathError: false,
   tagNames: [],
@@ -59,22 +53,22 @@ function goBack() {
       <LoadView
         v-if="currentView === 'load'"
         key="load"
-        :initial-state="loadViewState"
-        @state-change="(s: LoadViewState) => (loadViewState = s)"
+        :initial-state="saveFileState"
+        @state-change="(s: SaveFileState) => (saveFileState = s)"
         @navigate="navigateTo"
       />
       <ExportView
         v-else-if="currentView === 'export'"
         key="export"
-        :save-path="loadViewState.savePath"
-        :tag-names="loadViewState.tagNames"
+        :save-path="saveFileState.savePath"
+        :tag-names="saveFileState.tagNames"
         @go-back="goBack"
       />
       <ImportView
         v-else
         key="import"
-        :save-path="loadViewState.savePath"
-        :tag-names="loadViewState.tagNames"
+        :save-path="saveFileState.savePath"
+        :tag-names="saveFileState.tagNames"
         @go-back="goBack"
       />
     </Transition>
@@ -107,13 +101,5 @@ function goBack() {
 .slide-back-leave-to {
   opacity: 0;
   transform: translateX(40px);
-}
-
-.slide-forward-enter-to,
-.slide-forward-leave-from,
-.slide-back-enter-to,
-.slide-back-leave-from {
-  opacity: 1;
-  transform: translateX(0);
 }
 </style>

@@ -3,6 +3,7 @@ import { ref, computed, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import SavePathBar from '../components/SavePathBar.vue';
+import ViewHeader from '../components/ViewHeader.vue';
 
 interface TagPreview {
   path: string;
@@ -103,14 +104,7 @@ function reset() {
 
 <template>
   <div class="card">
-    <div class="card-view-header">
-      <button class="back-btn" @click="emit('go-back')" title="Back">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-        </svg>
-      </button>
-      <span class="card-view-header-title">Import Tags</span>
-    </div>
+    <ViewHeader title="Import Tags" @go-back="emit('go-back')" />
 
     <SavePathBar :label="savePath" />
 
@@ -186,78 +180,32 @@ function reset() {
         <div v-if="hasConflicts" class="conflict-hint">
           Conflicting tags default to <strong>Skip</strong>. Toggle each one to overwrite instead.
         </div>
-
-        <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
-
-        <button class="btn btn-primary" @click="doImport">Import</button>
       </template>
 
       <div v-else-if="!errorMsg" class="empty-hint">
         Choose one or more <code>.r2tag</code> files to import into your save.
       </div>
 
-      <div v-if="errorMsg && previews.length === 0" class="error-msg">{{ errorMsg }}</div>
+      <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
+
+      <button v-if="previews.length > 0" class="btn btn-primary" @click="doImport">Import</button>
     </template>
   </div>
 </template>
 
 <style scoped lang="scss">
-.tag-panel {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  font-size: 0.75rem;
-  padding: 0.75rem 1rem 0.25rem;
-  background: var(--surface-inset);
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-panel);
-
-  &-header {
-    flex-shrink: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--line-divider);
-    padding-bottom: 0.4em;
-    margin-bottom: 0.25em;
-    min-height: 2.5em;
-  }
-
-  &-label {
-    font-size: 1em;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 400;
-    color: var(--text-muted);
-  }
-}
-
 .conflict-badge {
   font-size: 0.85em;
   font-weight: 600;
-  color: #facc15;
+  color: var(--text-warning);
   background: rgba(250, 204, 21, 0.1);
   border: 1px solid rgba(250, 204, 21, 0.25);
   border-radius: 0.5em;
   padding: 0.25em 0.6em;
 }
 
-.tag-list {
-  list-style: none;
-  max-height: 14rem;
-  overflow-y: auto;
-}
-
 .tag-row {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding: 0.5em 0.25em;
-  border-bottom: 1px solid var(--line-divider);
-
-  &:last-child {
-    border-bottom: none;
-  }
 }
 
 .tag-info {
@@ -293,7 +241,7 @@ function reset() {
   cursor: pointer;
   border: 1.5px solid rgba(250, 204, 21, 0.4);
   background: transparent;
-  color: #facc15;
+  color: var(--text-warning);
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 
   &--overwrite {
@@ -333,16 +281,6 @@ function reset() {
     padding: 0.1em 0.3em;
     border-radius: 3px;
   }
-}
-
-.error-msg {
-  width: 100%;
-  padding: 0.6em 0.8em;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  border-radius: var(--radius-button);
-  font-size: 0.8em;
-  color: var(--text-failure);
 }
 
 .result-panel {

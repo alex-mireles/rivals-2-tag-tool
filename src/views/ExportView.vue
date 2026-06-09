@@ -3,6 +3,7 @@ import { ref, computed, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import SavePathBar from '../components/SavePathBar.vue';
+import ViewHeader from '../components/ViewHeader.vue';
 
 const props = defineProps<{
   savePath: string;
@@ -53,7 +54,7 @@ async function exportSelected() {
       tagNames: [...selected.value],
       outputDir,
     });
-    result.value = { exported, outputDir: outputDir as string };
+    result.value = { exported, outputDir };
   } catch (err) {
     errorMsg.value = String(err);
   } finally {
@@ -70,15 +71,7 @@ function reset() {
 
 <template>
   <div class="card">
-    <div class="card-view-header">
-      <button class="back-btn" @click="emit('go-back')" title="Back">
-        <!-- back arrow -->
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-        </svg>
-      </button>
-      <span class="card-view-header-title">Export Tags</span>
-    </div>
+    <ViewHeader title="Export Tags" @go-back="emit('go-back')" />
 
     <SavePathBar :label="savePath" />
 
@@ -143,36 +136,6 @@ function reset() {
 </template>
 
 <style scoped lang="scss">
-.tag-panel {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  font-size: 0.75rem;
-  padding: 0.75rem 1rem 0.25rem;
-  background: var(--surface-inset);
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-panel);
-
-  &-header {
-    flex-shrink: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--line-divider);
-    padding-bottom: 0.4em;
-    margin-bottom: 0.25em;
-    min-height: 2.5em;
-  }
-
-  &-label {
-    font-size: 1em;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 400;
-    color: var(--text-muted);
-  }
-}
-
 .select-all-btn {
   background: none;
   border: 1px solid var(--line-subtle);
@@ -189,22 +152,8 @@ function reset() {
   }
 }
 
-.tag-list {
-  list-style: none;
-  max-height: 14rem;
-  overflow-y: auto;
-}
-
 .tag-row {
-  display: flex;
-  align-items: center;
-  padding: 0.5em 0.25em;
-  border-bottom: 1px solid var(--line-divider);
   gap: 0.75em;
-
-  &:last-child {
-    border-bottom: none;
-  }
 
   &--selectable {
     cursor: pointer;
@@ -230,16 +179,6 @@ function reset() {
     background: var(--accent);
     border-color: var(--accent);
   }
-}
-
-.error-msg {
-  width: 100%;
-  padding: 0.6em 0.8em;
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  border-radius: var(--radius-button);
-  font-size: 0.8em;
-  color: var(--text-failure);
 }
 
 .result-panel {

@@ -3,22 +3,16 @@ import { ref, computed, watch, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import SavePathBar from '../components/SavePathBar.vue';
+import type { SaveFileState } from '../types';
 
 const EXPECTED_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
 const appVersion = APP_VERSION;
 
-interface LoadViewState {
-  savePath: string;
-  savePathError: boolean;
-  tagNames: string[];
-  hasLoaded: boolean;
-}
-
-const props = defineProps<{ initialState: LoadViewState }>();
+const props = defineProps<{ initialState: SaveFileState }>();
 
 const emit = defineEmits<{
   navigate: [view: 'export' | 'import'];
-  stateChange: [state: LoadViewState];
+  stateChange: [state: SaveFileState];
 }>();
 
 const errorMsg = ref('');
@@ -59,14 +53,8 @@ async function chooseSaveFile() {
 
   const fileName = filePath.split(/[\\/]/).pop() ?? '';
 
-  if (fileName !== EXPECTED_SAVE_FILE_NAME) {
-    savePath.value = filePath;
-    savePathError.value = true;
-    return;
-  }
-
-  savePathError.value = false;
   savePath.value = filePath;
+  savePathError.value = fileName !== EXPECTED_SAVE_FILE_NAME;
 }
 
 const savePathDisplay = computed(() => {
@@ -193,32 +181,11 @@ async function loadTagNames() {
 
 
 .tag-panel {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  font-size: 0.75rem;
-  padding: 0.75rem 1rem 0.25rem;
   min-height: 8rem;
-  background: var(--surface-inset);
-  border: 1px solid var(--line-subtle);
-  border-radius: var(--radius-panel);
 
   &-header {
-    flex-shrink: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--line-divider);
     padding-bottom: 0.2em;
-    min-height: 2.5em;
-  }
-
-  &-label {
-    font-size: 1em;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    font-weight: 400;
-    color: var(--text-muted);
+    margin-bottom: 0;
   }
 
   &-count {
@@ -245,23 +212,13 @@ async function loadTagNames() {
 
 .tag {
   &-list {
-    list-style: none;
     max-height: 10rem;
-    overflow-y: auto;
   }
 
   &-row {
-    display: flex;
-    align-items: center;
     justify-content: center;
     padding: 0.5em;
-    border-bottom: 1px solid var(--line-divider);
-
-    &:last-child {
-      border-bottom: none;
-    }
   }
-
 }
 
 .action-row {

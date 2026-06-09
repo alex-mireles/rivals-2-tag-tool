@@ -228,7 +228,64 @@ button:focus-visible {
   letter-spacing: 0.02em;
   font-size: 1.5em;
   font-weight: 800;
-  color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.tag-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-size: 0.75rem;
+  padding: 0.75rem 1rem 0.25rem;
+  background: var(--surface-inset);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-panel);
+
+  &-header {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--line-divider);
+    padding-bottom: 0.4em;
+    margin-bottom: 0.25em;
+    min-height: 2.5em;
+  }
+
+  &-label {
+    font-size: 1em;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+}
+
+.tag-list {
+  list-style: none;
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  padding: 0.5em 0.25em;
+  border-bottom: 1px solid var(--line-divider);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.error-msg {
+  width: 100%;
+  padding: 0.6em 0.8em;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: var(--radius-button);
+  font-size: 0.8em;
+  color: var(--text-failure);
 }
 
 :root {
@@ -247,9 +304,9 @@ button:focus-visible {
 
   // Text
   --text-primary:   #ffffff;
-  --text-secondary: #ffffff;
   --text-muted:     rgba(255, 255, 255, 0.6);
   --text-success:   #00ffaa;
+  --text-warning:   #facc15;
   --text-failure:   #f87171;
 
   // Borders

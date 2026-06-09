@@ -11,16 +11,16 @@ export default defineConfig([
   tseslint.configs.recommended,
   pluginVue.configs["flat/essential"],
   { 
-    files: ["**/*.vue"], 
-    languageOptions: { 
-      parserOptions: { parser: tseslint.parser } 
+    files: ["**/*.vue"],
+    languageOptions: {
+      parserOptions: { parser: tseslint.parser },
+      globals: {
+        APP_VERSION: 'readonly'
+      }
     },
     rules: {
       quotes: ["error", "single"],
       "vue/max-attributes-per-line": "off",
     },
-    globals: {
-      APP_VERSION: 'readonly'
-    }
   },
 ]);
