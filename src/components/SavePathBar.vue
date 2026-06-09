@@ -28,7 +28,7 @@ defineProps<{ savePath: string }>();
   }
 
   &-label {
-    font-family: monospace;
+    font-family: 'Source Code Pro', monospace;
     font-size: 0.8em;
     color: var(--text-success);
     min-width: 0;

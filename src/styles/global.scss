@@ -212,6 +212,24 @@ button:focus-visible {
   }
 }
 
+.result-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+
+  &-item {
+    font-family: 'Source Code Pro', monospace;
+  }
+}
+
+.tag-name {
+  font-family: 'Source Code Pro', monospace;
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
 :root {
   // Base palette
   --color-bg: #0e0c24;

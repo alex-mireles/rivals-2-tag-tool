@@ -268,14 +268,11 @@ function reset() {
 }
 
 .tag-name {
-  font-family: 'Consolas';
   font-size: 1.4em;
-  font-weight: 700;
-  color: var(--text-secondary);
 }
 
 .tag-source {
-  font-family: monospace;
+  font-family: 'Source Code Pro', monospace;
   font-size: 0.85em;
   color: var(--text-muted);
   overflow: hidden;
@@ -331,7 +328,7 @@ function reset() {
   padding: 1em;
 
   code {
-    font-family: monospace;
+    font-family: 'Source Code Pro', monospace;
     background: var(--surface-inset);
     padding: 0.1em 0.3em;
     border-radius: 3px;
@@ -378,31 +375,23 @@ function reset() {
   }
 }
 
-.result-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2em;
+.result-list-item {
+  font-size: 0.9em;
+  font-weight: 600;
 
-  &-item {
-    font-family: 'Consolas';
-    font-size: 0.9em;
-    font-weight: 600;
+  &--imported {
+    color: var(--text-success);
 
-    &--imported {
-      color: var(--text-success);
-
-      &::before {
-        content: '✓ ';
-      }
+    &::before {
+      content: '✓ ';
     }
+  }
 
-    &--skipped {
-      color: var(--text-muted);
+  &--skipped {
+    color: var(--text-muted);
 
-      &::before {
-        content: '– ';
-      }
+    &::before {
+      content: '– ';
     }
   }
 }

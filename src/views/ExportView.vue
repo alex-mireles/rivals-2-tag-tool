@@ -232,13 +232,6 @@ function reset() {
   }
 }
 
-.tag-name {
-  font-family: 'Consolas';
-  font-size: 1.5em;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
 .error-msg {
   width: 100%;
   padding: 0.6em 0.8em;
@@ -268,27 +261,19 @@ function reset() {
   }
 
   &-path {
-    font-family: monospace;
+    font-family: 'Source Code Pro', monospace;
     word-break: break-all;
   }
 }
 
-.result-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2em;
+.result-list-item {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  padding-left: 0.5em;
 
-  &-item {
-    font-family: monospace;
-    font-size: 0.8em;
-    color: var(--text-muted);
-    padding-left: 0.5em;
-
-    &::before {
-      content: '✓ ';
-      color: var(--text-success);
-    }
+  &::before {
+    content: '✓ ';
+    color: var(--text-success);
   }
 }
 </style>

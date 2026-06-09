@@ -1,4 +1,4 @@
-# Rivals of Aether II Tag Tool
+# Rivals II Tag Tool
 
 Sitting down at a new tournament setup, creating a tag, and setting your custom controls can be tedious.
 

@@ -97,7 +97,7 @@ async function loadTagNames() {
 <template>
   <div class="card">
     <div class="card-header">
-      <h1 class="app-title">Rivals of Aether II <br> Player Tag Tool</h1>
+      <h1 class="app-title">Rivals II Tag Tool</h1>
       <span class="app-version">v{{ appVersion }}</span>
     </div>
 
@@ -210,7 +210,7 @@ async function loadTagNames() {
 }
 
 .save-path-label {
-  font-family: monospace;
+  font-family: 'Source Code Pro', monospace;
   font-size: 0.9em;
   min-width: 0;
   color: var(--text-muted);
@@ -295,12 +295,6 @@ async function loadTagNames() {
     }
   }
 
-  &-name {
-    font-family: 'Consolas';
-    font-size: 1.5em;
-    font-weight: 700;
-    color: var(--text-secondary);
-  }
 }
 
 .action-row {
