@@ -84,7 +84,7 @@ function reset() {
         </span>
         <ul class="result-list">
           <li v-for="path in result.exported" :key="path" class="result-list-item">
-            {{ path.split('\\').pop() }}
+            {{ path.split(/[\\/]/).pop() }}
           </li>
         </ul>
       </div>
