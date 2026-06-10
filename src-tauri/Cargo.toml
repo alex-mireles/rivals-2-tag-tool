@@ -1,9 +1,10 @@
 [package]
 name = "rivals-2-tag-tool"
 version = "1.0.0-beta.1"
-description = "A Tauri App"
-authors = ["you"]
+description = "Export, share, and import Rivals of Aether II tags & custom controls"
+authors = ["Alex Mireles (HyperFlame)"]
 edition = "2021"
+repository = "https://github.com/alex-mireles/rivals-2-tag-tool"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
