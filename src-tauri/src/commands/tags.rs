@@ -51,6 +51,16 @@ fn tag_name_of(sv: &StructValue) -> Option<&str> {
     None
 }
 
+/// Read the root `SaveVersion` (save-format version) from a save. Both `.sav`
+/// files and `.r2tag` files (which are full saves) carry this. Returns `None`
+/// if the property is absent or not an integer.
+fn save_version(save: &Save) -> Option<i32> {
+    match save.root.properties.0.get(&PropertyKey::from("SaveVersion")) {
+        Some(Property::Int(v)) => Some(*v),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -128,18 +138,40 @@ pub async fn export_tags(
 pub struct TagPreview {
     pub path: String,
     pub tag_name: String,
+    /// Save-format version embedded in the .r2tag, or `None` if unreadable.
+    pub version: Option<i32>,
+    /// True only when the .r2tag's version matches the loaded save's version.
+    pub compatible: bool,
 }
 
-/// Read .r2tag files and return the tag name stored in each.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PreviewResult {
+    /// Version of the currently loaded save, used as the compatibility target.
+    pub save_version: Option<i32>,
+    pub previews: Vec<TagPreview>,
+}
+
+/// Read .r2tag files and return the tag name + save-format version stored in
+/// each, flagging whether each matches the loaded save's version.
 #[tauri::command]
-pub async fn get_tag_previews(r2tag_paths: Vec<String>) -> Result<Vec<TagPreview>, String> {
+pub async fn get_tag_previews(
+    r2tag_paths: Vec<String>,
+    save_path: String,
+) -> Result<PreviewResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        let dest_file = File::open(&save_path).map_err(|e| e.to_string())?;
+        let mut dest_reader = BufReader::new(dest_file);
+        let dest = Save::read(&mut dest_reader).map_err(|e| e.to_string())?;
+        let dest_version = save_version(&dest);
+
         let mut previews = Vec::new();
 
         for path in r2tag_paths {
             let file = File::open(&path).map_err(|e| e.to_string())?;
             let mut reader = BufReader::new(file);
             let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+
+            let version = save_version(&save);
 
             let tag_structs = match &save.root.properties["SavedPlayerTags"] {
                 Property::Array(ValueVec::Struct(structs)) => structs,
@@ -154,10 +186,15 @@ pub async fn get_tag_previews(r2tag_paths: Vec<String>) -> Result<Vec<TagPreview
             previews.push(TagPreview {
                 path,
                 tag_name: name.to_string(),
+                version,
+                compatible: version.is_some() && version == dest_version,
             });
         }
 
-        Ok(previews)
+        Ok(PreviewResult {
+            save_version: dest_version,
+            previews,
+        })
     })
     .await
     .map_err(|e| e.to_string())?
@@ -174,6 +211,9 @@ pub struct ImportInstruction {
 pub struct ImportResult {
     pub imported: Vec<String>,
     pub skipped: Vec<String>,
+    /// Tags rejected because their save-format version differs from the
+    /// destination save (importing them would fail to write or corrupt data).
+    pub incompatible: Vec<String>,
 }
 
 /// Import tags from .r2tag files into save_path.
@@ -187,9 +227,11 @@ pub async fn import_tags(
         let file = File::open(&save_path).map_err(|e| e.to_string())?;
         let mut reader = BufReader::new(file);
         let mut dest = Save::read(&mut reader).map_err(|e| e.to_string())?;
+        let dest_version = save_version(&dest);
 
         let mut imported = Vec::new();
         let mut skipped = Vec::new();
+        let mut incompatible = Vec::new();
 
         // Scope the mutable borrow of dest so dest.write() can proceed after the loop.
         {
@@ -211,6 +253,14 @@ pub async fn import_tags(
                 let r2tag_file = File::open(&instruction.path).map_err(|e| e.to_string())?;
                 let mut r2tag_reader = BufReader::new(r2tag_file);
                 let r2tag_save = Save::read(&mut r2tag_reader).map_err(|e| e.to_string())?;
+
+                // Reject cross-version imports: a tag from a different save format
+                // can't be written into this save (or would lose/garble settings).
+                let source_version = save_version(&r2tag_save);
+                if source_version.is_none() || source_version != dest_version {
+                    incompatible.push(instruction.tag_name);
+                    continue;
+                }
 
                 let source_structs = match &r2tag_save.root.properties["SavedPlayerTags"] {
                     Property::Array(ValueVec::Struct(structs)) => structs,
@@ -237,7 +287,11 @@ pub async fn import_tags(
         dest.write(&mut std::io::BufWriter::new(out))
             .map_err(|e| e.to_string())?;
 
-        Ok(ImportResult { imported, skipped })
+        Ok(ImportResult {
+            imported,
+            skipped,
+            incompatible,
+        })
     })
     .await
     .map_err(|e| e.to_string())?
