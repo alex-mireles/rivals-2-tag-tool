@@ -24,5 +24,6 @@ dist-ssr
 *.local
 test-data
 
+# AI stuff
 .claude
-.vscode
+graphify-out

@@ -50,6 +50,18 @@ On Windows:
 
 Use **Choose a Save File** to browse to it.
 
+**The Windows SmartScreen warning came up with "Windows protected your PC." Is that bad?**
+
+Currently the builds aren't code-signed, so Windows doesn't recognize me as the publisher. Click **More info → Run anyway** to install.
+
+**macOS says the app "is damaged and can't be opened." What gives?**
+
+The builds aren't code-signed or notarized with Apple, so macOS quarantines downloaded copies. The app isn't actually damaged. Remove the quarantine flag by running this command in your terminal and it will open properly:
+
+```sh
+xattr -d com.apple.quarantine "/Applications/Rivals II Tag Tool.app"
+```
+
 **Does the tool work on macOS even though Rivals II isn't on Mac?**
 
 Yes. Rivals of Aether II does not natively support macOS, so there's no default save location to look for, but the tool itself runs natively on Mac. As long as you have a valid `Rivals2_PlayerTagSaveSlot.sav` to point it at, you can import and export tags as usual via **Choose a Save File**.
@@ -64,7 +76,7 @@ Yes... but you should almost certainly close it. Rivals II does not reread from 
 
 **What exactly is in a `.r2tag` file?**
 
-It's a custom file containing a single player tag the tag name and its custom control settings. Nothing else from your save (or your system) is included, so they're safe to share.
+It's a custom file containing a single player tag: the tag name and its custom control settings. Nothing else from your save (or your system) is included, so they're safe to share.
 
 **What happens if an imported tag already exists on the setup?**
 
