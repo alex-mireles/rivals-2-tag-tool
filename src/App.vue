@@ -4,11 +4,13 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import LoadView from './views/LoadView.vue';
 import ExportView from './views/ExportView.vue';
 import ImportView from './views/ImportView.vue';
+import ShareView from './views/ShareView.vue';
+import DownloadView from './views/DownloadView.vue';
 import type { SaveFileState } from './types';
 
 const appWindow = getCurrentWindow();
 
-type ViewName = 'load' | 'export' | 'import';
+type ViewName = 'load' | 'export' | 'import' | 'share' | 'download';
 
 const currentView = ref<ViewName>('load');
 const transitionName = ref('slide-forward');
@@ -65,8 +67,22 @@ function goBack() {
         @go-back="goBack"
       />
       <ImportView
-        v-else
+        v-else-if="currentView === 'import'"
         key="import"
+        :save-path="saveFileState.savePath"
+        :tag-names="saveFileState.tagNames"
+        @go-back="goBack"
+      />
+      <ShareView
+        v-else-if="currentView === 'share'"
+        key="share"
+        :save-path="saveFileState.savePath"
+        :tag-names="saveFileState.tagNames"
+        @go-back="goBack"
+      />
+      <DownloadView
+        v-else
+        key="download"
         :save-path="saveFileState.savePath"
         :tag-names="saveFileState.tagNames"
         @go-back="goBack"

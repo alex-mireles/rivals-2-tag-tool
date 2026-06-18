@@ -10,6 +10,10 @@ interface StartggPlayer {
   image: string;
 }
 
+// `compact` drops the heading/hint and panel chrome so the linker can sit
+// inline in a row (used per-tag in the Share view).
+defineProps<{ compact?: boolean }>();
+
 const model = defineModel<StartggLinkValue | null>({ default: null });
 
 const root = ref<HTMLElement | null>(null);
@@ -99,13 +103,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="root" class="sgg">
-    <span class="sgg-heading">start.gg account <span class="sgg-optional">(optional)</span></span>
-    <p class="sgg-hint">
-      Link your start.gg account to make these tags shareable on the tag-sharing site —
-      it writes an upload-ready sidecar next to each <code>.r2tag</code>. Leave blank to
-      just export the files. Search your gamer tag or paste your profile URL.
-    </p>
+  <div ref="root" class="sgg" :class="{ 'sgg--compact': compact }">
+    <template v-if="!compact">
+      <span class="sgg-heading">start.gg account <span class="sgg-optional">(optional)</span></span>
+      <p class="sgg-hint">
+        Link your start.gg account to make these tags shareable on the tag-sharing site —
+        it writes an upload-ready sidecar next to each <code>.r2tag</code>. Leave blank to
+        just export the files. Search your gamer tag or paste your profile URL.
+      </p>
+    </template>
 
     <!-- Selected -->
     <div v-if="model" class="sgg-chip">
@@ -161,6 +167,13 @@ onBeforeUnmount(() => {
   background: var(--surface-inset);
   border: 1px solid var(--line-subtle);
   border-radius: var(--radius-panel);
+
+  &--compact {
+    padding: 0;
+    gap: 0;
+    background: none;
+    border: none;
+  }
 }
 
 .sgg-heading {

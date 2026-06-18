@@ -12,7 +12,7 @@ const appVersion = APP_VERSION;
 const props = defineProps<{ initialState: SaveFileState }>();
 
 const emit = defineEmits<{
-  navigate: [view: 'export' | 'import'];
+  navigate: [view: 'export' | 'import' | 'share' | 'download'];
   stateChange: [state: SaveFileState];
 }>();
 
@@ -154,12 +154,26 @@ async function loadTagNames() {
     </Transition>
 
     <Transition name="fade">
-      <div v-if="hasLoaded && tagNames.length !== 0" class="action-row">
-        <button class="btn btn-primary" @click="emit('navigate', 'import')">
-          Import or Overwrite Tags
+      <div v-if="hasLoaded" class="action-grid">
+        <button
+          class="btn btn-primary"
+          :disabled="tagNames.length === 0"
+          @click="emit('navigate', 'export')"
+        >
+          Export to File
         </button>
-        <button class="btn btn-primary" @click="emit('navigate', 'export')">
-          Export Tags
+        <button
+          class="btn btn-primary"
+          :disabled="tagNames.length === 0"
+          @click="emit('navigate', 'share')"
+        >
+          Share to Site
+        </button>
+        <button class="btn btn-primary" @click="emit('navigate', 'import')">
+          Import from File
+        </button>
+        <button class="btn btn-primary" @click="emit('navigate', 'download')">
+          Download from Site
         </button>
       </div>
     </Transition>
@@ -224,13 +238,15 @@ async function loadTagNames() {
   }
 }
 
-.action-row {
+.action-grid {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.625rem;
 
   .btn {
-    flex: 1;
+    width: 100%;
+    white-space: nowrap;
   }
 }
 

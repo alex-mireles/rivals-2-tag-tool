@@ -8,11 +8,18 @@ Runs on **Windows** and **macOS**.
 
 ## Usage
 
+After loading your save you can:
+
+- **Export to File** — write your selected tags to `.r2tag` files to share however you like.
+- **Share to Site** — publish tags straight to the [tag-sharing site](https://jugeeya.github.io/tags/), linking each to its start.gg account. Nothing is written locally; the tags upload directly.
+- **Import from File** — import `.r2tag` files into your save (with conflict/overwrite handling).
+- **Download from Site** — browse published tags, or paste a start.gg event URL to grab every entrant's tag from a bracket, then import them into your save.
+
 **Players (at home):**
-Export your custom player tag and controls to a `.r2tag` file, then send it to your tournament organizers.
+Export (or share) your custom player tag and controls, then send it to your tournament organizers.
 
 **Tournament Organizers:**
-Gather all of your entrants' `.r2tag` files, and import them directly onto your setups!
+Gather your entrants' `.r2tag` files — from a folder or straight from a start.gg bracket via **Download from Site** — and import them directly onto your setups!
 
 ## Contributing / Development Setup
 
@@ -78,18 +85,13 @@ Yes... but you should almost certainly close it. Rivals II does not reread from 
 
 It's a custom file containing a single player tag: the tag name and its custom control settings. Nothing else from your save (or your system) is included, so they're safe to share.
 
-**What's the start.gg account field on the Export screen?**
+**What does "Share to Site" do, and why does it ask for start.gg?**
 
-It's optional. You can export `.r2tag` files without it. If you *do* link a start.gg account (search your gamer tag or paste your profile URL), the tool also writes a small `<tag>.json` sidecar next to each `.r2tag` recording the account, e.g.:
+Share to Site publishes your selected tags to the tag-sharing website without writing any local files. Each tag is linked to a start.gg account (search your gamer tag or paste your profile URL) so it can later be pulled by bracket. Different tags in one share can be linked to different players — handy for a TO publishing several entrants at once. Submitting opens a pull request that auto-merges once it passes validation, then the tag appears on the site. Plain **Export to File** doesn't need start.gg.
 
-```json
-{
-  "name": "JUGZ!",
-  "startgg": { "slug": "user/6192f6f1", "tag": "jugeeya" }
-}
-```
+**How does "Download from Site" by bracket work?**
 
-This matches the format used by the tag-sharing website, so exported tags are ready to upload and can be pulled by start.gg bracket there. The lookup uses start.gg's public API and needs no login. The `.r2tag` itself is unchanged.
+Paste a start.gg event URL and the tool looks up every entrant's linked start.gg account, then selects all published tags belonging to those players. Download pulls them and drops you into the normal import screen (same conflict/overwrite + version-compatibility handling). start.gg lookups use its public API and need no login.
 
 **What happens if an imported tag already exists on the setup?**
 

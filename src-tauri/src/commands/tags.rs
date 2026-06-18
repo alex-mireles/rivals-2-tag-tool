@@ -16,7 +16,7 @@ const RESERVED_FILE_NAMES: [&str; 22] = [
 ];
 
 /// Make a tag name safe to use as a file stem on both Windows and macOS.
-fn sanitize_file_stem(name: &str) -> String {
+pub(crate) fn sanitize_file_stem(name: &str) -> String {
     let mut stem: String = name
         .chars()
         .map(|c| match c {
@@ -97,6 +97,27 @@ pub struct StartggLink {
     pub tag: String,
 }
 
+/// Read `save_path` and return the bytes of a one-tag `.r2tag` — the full save
+/// with only `tag_name` retained in `SavedPlayerTags`. Shared by file export
+/// and share-to-site.
+pub(crate) fn single_tag_save_bytes(save_path: &str, tag_name: &str) -> Result<Vec<u8>, String> {
+    let file = File::open(save_path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(file);
+    let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+
+    if let Property::Array(ValueVec::Struct(structs)) =
+        &mut save.root.properties["SavedPlayerTags"]
+    {
+        structs.retain(|sv| tag_name_of(sv) == Some(tag_name));
+    } else {
+        return Err("SavedPlayerTags is not a struct array".into());
+    }
+
+    let mut buf = Vec::new();
+    save.write(&mut buf).map_err(|e| e.to_string())?;
+    Ok(buf)
+}
+
 /// Export the named tags as individual .r2tag files (binary save format) into output_dir.
 /// When a start.gg account is linked, also writes a `<stem>.json` sidecar next to each
 /// `.r2tag` (the same shape the tag-sharing website uses) so exports are upload-ready.
@@ -113,17 +134,7 @@ pub async fn export_tags(
         let mut used_stems = std::collections::HashSet::new();
 
         for tag_name in &tag_names {
-            let file = File::open(&save_path).map_err(|e| e.to_string())?;
-            let mut reader = BufReader::new(file);
-            let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-            if let Property::Array(ValueVec::Struct(structs)) =
-                &mut save.root.properties["SavedPlayerTags"]
-            {
-                structs.retain(|sv| tag_name_of(sv) == Some(tag_name.as_str()));
-            } else {
-                return Err("SavedPlayerTags is not a struct array".into());
-            }
+            let bytes = single_tag_save_bytes(&save_path, tag_name)?;
 
             // Distinct tag names can collide after sanitizing (e.g. "a/b" and "a:b");
             // suffix a counter so one export doesn't overwrite another.
@@ -136,8 +147,7 @@ pub async fn export_tags(
             }
 
             let out_path = std::path::Path::new(&output_dir).join(format!("{stem}.r2tag"));
-            let mut out_file = File::create(&out_path).map_err(|e| e.to_string())?;
-            save.write(&mut out_file).map_err(|e| e.to_string())?;
+            std::fs::write(&out_path, &bytes).map_err(|e| e.to_string())?;
             written.push(out_path.to_string_lossy().to_string());
 
             // Write the website-style sidecar so the exported tag is upload-ready.

@@ -136,9 +136,124 @@ pub async fn startgg_user(slug: String) -> Result<StartggPlayer, String> {
     })
 }
 
+/// An entrant in a start.gg event, with their linked start.gg user slug.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventEntrant {
+    /// The entrant name as it appears in the bracket (may include a prefix/team).
+    pub entrant: String,
+    pub gamer_tag: String,
+    pub slug: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EventResult {
+    pub event: String,
+    pub entrants: Vec<EventEntrant>,
+}
+
+/// Pull `tournament/<t>/event/<e>` out of a start.gg event URL (or accept a
+/// bare slug).
+fn parse_event_slug(text: &str) -> Option<String> {
+    let t = text.trim();
+    // Find "tournament/<seg>/event/<seg>" anywhere in the string.
+    let bytes = t.to_ascii_lowercase();
+    let idx = bytes.find("tournament/")?;
+    let rest = &t[idx..];
+    let parts: Vec<&str> = rest.split('/').collect();
+    // parts: ["tournament", <t>, "event", <e>, ...]
+    if parts.len() >= 4 && parts[0].eq_ignore_ascii_case("tournament") && parts[2].eq_ignore_ascii_case("event") {
+        let tour = parts[1];
+        // Trim any trailing query/fragment on the event segment.
+        let ev = parts[3].split(|c| c == '?' || c == '#').next().unwrap_or("");
+        if !tour.is_empty() && !ev.is_empty() {
+            return Some(format!("tournament/{tour}/event/{ev}"));
+        }
+    }
+    None
+}
+
+/// Resolve a start.gg event URL to its entrants and their linked user slugs,
+/// for matching against shared tags (download-by-bracket).
+#[tauri::command]
+pub async fn startgg_event(url: String) -> Result<EventResult, String> {
+    let slug = parse_event_slug(&url)
+        .ok_or_else(|| "Expected a start.gg event URL (…/tournament/<t>/event/<e>).".to_string())?;
+
+    let mut entrants = Vec::new();
+    let mut event_name = String::new();
+    let mut page = 1;
+    let mut total_pages = 1;
+
+    while page <= total_pages && page <= 30 {
+        let data = gql(
+            "query($slug:String!,$page:Int!){ event(slug:$slug){ name \
+               entrants(query:{ page:$page, perPage:64 }){ \
+                 pageInfo{ totalPages } \
+                 nodes{ name participants{ gamerTag user{ slug } } } } } }",
+            serde_json::json!({ "slug": slug, "page": page }),
+        )
+        .await?;
+
+        let ev = data
+            .get("event")
+            .filter(|v| !v.is_null())
+            .ok_or_else(|| "Event not found.".to_string())?;
+
+        if page == 1 {
+            event_name = str_at(ev, "/name").to_string();
+        }
+        total_pages = ev
+            .pointer("/entrants/pageInfo/totalPages")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(1);
+
+        if let Some(nodes) = ev.pointer("/entrants/nodes").and_then(|v| v.as_array()) {
+            for n in nodes {
+                let entrant = str_at(n, "/name").to_string();
+                if let Some(parts) = n.pointer("/participants").and_then(|v| v.as_array()) {
+                    for p in parts {
+                        let slug = str_at(p, "/user/slug");
+                        if !slug.is_empty() {
+                            entrants.push(EventEntrant {
+                                entrant: entrant.clone(),
+                                gamer_tag: str_at(p, "/gamerTag").to_string(),
+                                slug: slug.to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        page += 1;
+    }
+
+    Ok(EventResult { event: event_name, entrants })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::is_user_slug;
+    use super::{is_user_slug, parse_event_slug};
+
+    #[test]
+    fn parses_event_slugs() {
+        assert_eq!(
+            parse_event_slug("https://www.start.gg/tournament/port-priority-dx/event/rivals-of-aether-ii-singles"),
+            Some("tournament/port-priority-dx/event/rivals-of-aether-ii-singles".into())
+        );
+        assert_eq!(
+            parse_event_slug("start.gg/tournament/x/event/y/brackets/123/456"),
+            Some("tournament/x/event/y".into())
+        );
+        assert_eq!(
+            parse_event_slug("tournament/a/event/b?foo=1"),
+            Some("tournament/a/event/b".into())
+        );
+        assert_eq!(parse_event_slug("https://www.start.gg/user/6192f6f1"), None);
+        assert_eq!(parse_event_slug("nonsense"), None);
+    }
+
 
     #[test]
     fn accepts_valid_slugs() {
