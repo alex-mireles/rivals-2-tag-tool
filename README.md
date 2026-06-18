@@ -80,7 +80,7 @@ It's a custom file containing a single player tag: the tag name and its custom c
 
 **What's the start.gg account field on the Export screen?**
 
-Exporting links your tags to your start.gg account (search your gamer tag or paste your profile URL). Alongside each `.r2tag`, the tool writes a small `<tag>.json` sidecar recording the linked account, e.g.:
+It's optional. You can export `.r2tag` files without it. If you *do* link a start.gg account (search your gamer tag or paste your profile URL), the tool also writes a small `<tag>.json` sidecar next to each `.r2tag` recording the account, e.g.:
 
 ```json
 {

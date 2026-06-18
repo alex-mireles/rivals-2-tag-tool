@@ -20,7 +20,7 @@ const emit = defineEmits<{
 const selected = ref<Set<string>>(new Set());
 const startggLink = ref<StartggLinkValue | null>(null);
 const isExporting = ref(false);
-const result = ref<{ exported: string[]; outputDir: string } | null>(null);
+const result = ref<{ exported: string[]; outputDir: string; linked: boolean; tag: string } | null>(null);
 const errorMsg = ref('');
 
 const allSelected = computed(() => selected.value.size === props.tagNames.length);
@@ -59,7 +59,12 @@ async function exportSelected() {
       outputDir,
       startgg: startggLink.value,
     });
-    result.value = { exported, outputDir };
+    result.value = {
+      exported,
+      outputDir,
+      linked: !!startggLink.value,
+      tag: startggLink.value?.tag ?? '',
+    };
   } catch (err) {
     errorMsg.value = String(err);
   } finally {
@@ -87,6 +92,14 @@ function reset() {
           <span class="result-panel-msg">
             Exported {{ result.exported.length }} tag{{ result.exported.length === 1 ? '' : 's' }} to
             <span class="result-panel-path">{{ result.outputDir }}</span>
+          </span>
+          <span class="result-panel-note">
+            <template v-if="result.linked">
+              Linked to <strong>@{{ result.tag }}</strong> — upload-ready sidecars written. Ready to share on the site.
+            </template>
+            <template v-else>
+              Tip: link a start.gg account to make these shareable on the tag-sharing site.
+            </template>
           </span>
           <ul class="result-list">
             <li v-for="path in result.exported" :key="path" class="result-list-item">
@@ -209,6 +222,15 @@ function reset() {
   &-path {
     font-family: 'Ubuntu Sans Mono Variable', monospace;
     word-break: break-all;
+  }
+
+  &-note {
+    font-size: 0.78em;
+    color: var(--text-muted);
+
+    strong {
+      color: var(--text-primary);
+    }
   }
 }
 
