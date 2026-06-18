@@ -171,16 +171,23 @@ fn extract_single_r2tag(zip_bytes: &[u8]) -> Result<Vec<u8>, String> {
     Err("downloaded zip did not contain a .r2tag".into())
 }
 
-/// Download the named published tag zips, unpack the `.r2tag` inside each into a
-/// temp directory, and return the extracted `.r2tag` paths (to hand to the
-/// import flow). `files` are manifest file names like `kim-e85def91.r2tag.zip`.
+/// Download the named published tag zips, unpack the `.r2tag` inside each, and
+/// return the extracted `.r2tag` paths. `files` are manifest file names like
+/// `kim-e85def91.r2tag.zip`. With `dest_dir` set, the files are written there
+/// (download-to-disk); otherwise they go to a temp dir (to feed the import flow).
 #[tauri::command]
-pub async fn download_tags(files: Vec<String>) -> Result<Vec<String>, String> {
+pub async fn download_tags(
+    files: Vec<String>,
+    dest_dir: Option<String>,
+) -> Result<Vec<String>, String> {
     if files.is_empty() {
         return Err("No tags selected to download.".into());
     }
 
-    let dir = std::env::temp_dir().join("rivals-2-tag-tool");
+    let dir = match dest_dir {
+        Some(d) => std::path::PathBuf::from(d),
+        None => std::env::temp_dir().join("rivals-2-tag-tool"),
+    };
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     let client = reqwest::Client::new();

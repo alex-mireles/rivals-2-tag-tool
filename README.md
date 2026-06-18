@@ -91,7 +91,7 @@ Share to Site publishes your selected tags to the tag-sharing website without wr
 
 **How does "Download from Site" by bracket work?**
 
-Paste a start.gg event URL and the tool looks up every entrant's linked start.gg account, then selects all published tags belonging to those players. Download pulls them and drops you into the normal import screen (same conflict/overwrite + version-compatibility handling). start.gg lookups use its public API and need no login.
+Paste a start.gg event URL and the tool looks up every entrant's linked start.gg account, then selects all published tags belonging to those players (you can also tick tags by hand from the browse list). From there you choose either **Import to Save** — which drops you into the normal import screen (same conflict/overwrite + version-compatibility handling) — or **Download Files**, which just saves the `.r2tag` files to a folder you pick. start.gg lookups use its public API and need no login.
 
 **What happens if an imported tag already exists on the setup?**
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import ViewHeader from '../components/ViewHeader.vue';
@@ -46,6 +47,7 @@ const bracketStatusKind = ref<'' | 'success' | 'warn' | 'error'>('');
 
 const downloading = ref(false);
 const paths = ref<string[]>([]);
+const downloadResult = ref<{ count: number; dir: string } | null>(null);
 
 const allSelected = computed(
   () => sharedTags.value.length > 0 && selected.value.size === sharedTags.value.length
@@ -101,13 +103,38 @@ async function findBracket() {
   }
 }
 
-async function downloadAndPreview() {
+// Download to a temp dir and hand the files to the import preview.
+async function importToSave() {
   if (selected.value.size === 0) return;
   downloading.value = true;
   listError.value = '';
   await nextTick();
   try {
-    paths.value = await invoke<string[]>('download_tags', { files: [...selected.value] });
+    paths.value = await invoke<string[]>('download_tags', {
+      files: [...selected.value],
+      destDir: null,
+    });
+  } catch (err) {
+    listError.value = String(err);
+  } finally {
+    downloading.value = false;
+  }
+}
+
+// Download the .r2tag files to a folder the user picks.
+async function downloadToFolder() {
+  if (selected.value.size === 0) return;
+  const dir = await open({ directory: true, title: 'Choose Download Folder' });
+  if (!dir) return;
+  downloading.value = true;
+  listError.value = '';
+  await nextTick();
+  try {
+    const written = await invoke<string[]>('download_tags', {
+      files: [...selected.value],
+      destDir: dir,
+    });
+    downloadResult.value = { count: written.length, dir };
   } catch (err) {
     listError.value = String(err);
   } finally {
@@ -117,6 +144,7 @@ async function downloadAndPreview() {
 
 function backToBrowse() {
   paths.value = [];
+  downloadResult.value = null;
 }
 
 function tagSub(t: SharedTag): string {
@@ -136,8 +164,30 @@ function tagSub(t: SharedTag): string {
     <Transition name="content-swap" mode="out-in">
       <div v-if="downloading" key="dl" class="loading-panel">Downloading tags...</div>
 
+      <!-- Files downloaded to a folder -->
+      <div v-else-if="downloadResult" key="dlresult" class="view-stack">
+        <div class="result-panel result-panel--success">
+          <span class="result-panel-msg">
+            Downloaded {{ downloadResult.count }} tag{{ downloadResult.count === 1 ? '' : 's' }} to
+            <span class="result-panel-path">{{ downloadResult.dir }}</span>
+          </span>
+        </div>
+        <button class="btn btn-primary" @click="backToBrowse">Back to Browse</button>
+      </div>
+
+      <!-- Downloaded -> import -->
+      <div v-else-if="paths.length > 0" key="import" class="view-stack">
+        <button class="back-to-browse" @click="backToBrowse">← Back to browse</button>
+        <TagImportPanel
+          :save-path="savePath"
+          :existing-tag-names="tagNames"
+          :paths="paths"
+          @restart="backToBrowse"
+        />
+      </div>
+
       <!-- Browse + bracket selection -->
-      <div v-else-if="paths.length === 0" key="browse" class="view-stack">
+      <div v-else key="browse" class="view-stack">
         <div class="bracket-field">
           <label class="bracket-label">Download a whole bracket</label>
           <p class="hint">Paste a start.gg event URL to auto-select every published tag belonging to an entrant.</p>
@@ -191,24 +241,15 @@ function tagSub(t: SharedTag): string {
           </ul>
         </div>
 
-        <button
-          class="btn btn-primary"
-          :disabled="selected.size === 0"
-          @click="downloadAndPreview"
-        >
-          {{ selected.size === 0 ? 'Select tags to download' : `Download ${selected.size} & Preview` }}
-        </button>
-      </div>
-
-      <!-- Downloaded -> import -->
-      <div v-else key="import" class="view-stack">
-        <button class="back-to-browse" @click="backToBrowse">← Back to browse</button>
-        <TagImportPanel
-          :save-path="savePath"
-          :existing-tag-names="tagNames"
-          :paths="paths"
-          @restart="backToBrowse"
-        />
+        <p v-if="selected.size === 0" class="action-hint">Select tags to import or download.</p>
+        <div v-else class="action-grid">
+          <button class="btn btn-primary" @click="importToSave">
+            Import {{ selected.size }} to Save
+          </button>
+          <button class="btn btn-primary btn-primary-muted" @click="downloadToFolder">
+            Download {{ selected.size }} File{{ selected.size === 1 ? '' : 's' }}
+          </button>
+        </div>
       </div>
     </Transition>
   </AnimatedCard>
@@ -363,6 +404,49 @@ function tagSub(t: SharedTag): string {
 
   &:hover {
     color: var(--text-primary);
+  }
+}
+
+.action-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+
+  .btn {
+    width: 100%;
+    white-space: nowrap;
+  }
+}
+
+.action-hint {
+  width: 100%;
+  text-align: center;
+  font-size: 0.82em;
+  color: var(--text-muted);
+}
+
+.result-panel {
+  width: 100%;
+  padding: 1em;
+  border-radius: var(--radius-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+
+  &--success {
+    background: rgba(0, 255, 170, 0.06);
+    border: 1px solid rgba(0, 255, 170, 0.2);
+  }
+
+  &-msg {
+    font-size: 0.9em;
+    color: var(--text-success);
+  }
+
+  &-path {
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
+    word-break: break-all;
   }
 }
 </style>
