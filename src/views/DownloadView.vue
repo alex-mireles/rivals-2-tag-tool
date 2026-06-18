@@ -159,7 +159,10 @@ function tagSub(t: SharedTag): string {
   <AnimatedCard>
     <ViewHeader title="Download from Site" @go-back="emit('go-back')" />
 
-    <SavePathBar :label="savePath" />
+    <SavePathBar
+      :label="savePath || 'No save file loaded — you can still download files'"
+      :status="savePath ? 'success' : 'idle'"
+    />
 
     <Transition name="content-swap" mode="out-in">
       <div v-if="downloading" key="dl" class="loading-panel">Downloading tags...</div>
@@ -242,14 +245,19 @@ function tagSub(t: SharedTag): string {
         </div>
 
         <p v-if="selected.size === 0" class="action-hint">Select tags to import or download.</p>
-        <div v-else class="action-grid">
-          <button class="btn btn-primary" @click="importToSave">
-            Import {{ selected.size }} to Save
-          </button>
-          <button class="btn btn-primary btn-primary-muted" @click="downloadToFolder">
-            Download {{ selected.size }} File{{ selected.size === 1 ? '' : 's' }}
-          </button>
-        </div>
+        <template v-else>
+          <div class="action-grid">
+            <button class="btn btn-primary" :disabled="!savePath" @click="importToSave">
+              Import {{ selected.size }} to Save
+            </button>
+            <button class="btn btn-primary btn-primary-muted" @click="downloadToFolder">
+              Download {{ selected.size }} File{{ selected.size === 1 ? '' : 's' }}
+            </button>
+          </div>
+          <p v-if="!savePath" class="action-hint">
+            Load a save file on the home screen to import directly — or just download the files.
+          </p>
+        </template>
       </div>
     </Transition>
   </AnimatedCard>

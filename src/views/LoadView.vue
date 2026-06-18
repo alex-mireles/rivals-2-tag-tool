@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue';
+import { ref, computed, watch, nextTick, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import AnimatedCard from '../components/AnimatedCard.vue';
@@ -23,6 +23,18 @@ const isLoading = ref(false);
 
 const savePath = ref(props.initialState.savePath);
 const savePathError = ref(props.initialState.savePathError);
+
+// How many tags are published on the sharing site — shown so the database is
+// visible (and reachable) from the home screen even without a save loaded.
+const sharedCount = ref<number | null>(null);
+onMounted(async () => {
+  try {
+    const tags = await invoke<unknown[]>('fetch_shared_tags');
+    sharedCount.value = tags.length;
+  } catch {
+    sharedCount.value = null; // offline / unreachable — just omit the count
+  }
+});
 
 watch([savePath, savePathError, tagNames, hasLoaded], () => {
   emit('stateChange', {
@@ -177,6 +189,10 @@ async function loadTagNames() {
         </button>
       </div>
     </Transition>
+
+    <button class="browse-link" @click="emit('navigate', 'download')">
+      Browse the shared tag database<span v-if="sharedCount !== null"> · {{ sharedCount }} tag{{ sharedCount === 1 ? '' : 's' }} available</span> — no save needed →
+    </button>
   </AnimatedCard>
 </template>
 
@@ -247,6 +263,21 @@ async function loadTagNames() {
   .btn {
     width: 100%;
     white-space: nowrap;
+  }
+}
+
+.browse-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8em;
+  cursor: pointer;
+  padding: 0.25em;
+  text-align: center;
+  transition: color 0.15s;
+
+  &:hover {
+    color: var(--text-primary);
   }
 }
 
