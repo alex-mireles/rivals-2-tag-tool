@@ -5,6 +5,8 @@ import { open } from '@tauri-apps/plugin-dialog';
 import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import ViewHeader from '../components/ViewHeader.vue';
+import StartggLink from '../components/StartggLink.vue';
+import type { StartggLinkValue } from '../types';
 
 const props = defineProps<{
   savePath: string;
@@ -16,6 +18,7 @@ const emit = defineEmits<{
 }>();
 
 const selected = ref<Set<string>>(new Set());
+const startggLink = ref<StartggLinkValue | null>(null);
 const isExporting = ref(false);
 const result = ref<{ exported: string[]; outputDir: string } | null>(null);
 const errorMsg = ref('');
@@ -54,6 +57,7 @@ async function exportSelected() {
       savePath: props.savePath,
       tagNames: [...selected.value],
       outputDir,
+      startgg: startggLink.value,
     });
     result.value = { exported, outputDir };
   } catch (err) {
@@ -122,11 +126,13 @@ function reset() {
           </ul>
         </div>
 
+        <StartggLink v-model="startggLink" />
+
         <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
 
         <button
           class="btn btn-primary"
-          :disabled="selected.size === 0"
+          :disabled="selected.size === 0 || !startggLink"
           @click="exportSelected"
         >
           Export {{ selected.size > 0 ? selected.size : '' }} Selected Tag{{ selected.size === 1 ? '' : 's' }}

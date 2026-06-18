@@ -87,13 +87,26 @@ pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
     .map_err(|e| e.to_string())?
 }
 
+/// A start.gg account linked to the tags being exported.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartggLink {
+    /// User slug, e.g. `user/6192f6f1`.
+    pub slug: String,
+    /// Gamer tag, for display.
+    pub tag: String,
+}
+
 /// Export the named tags as individual .r2tag files (binary save format) into output_dir.
-/// Returns the list of paths that were written.
+/// When a start.gg account is linked, also writes a `<stem>.json` sidecar next to each
+/// `.r2tag` (the same shape the tag-sharing website uses) so exports are upload-ready.
+/// Returns the list of `.r2tag` paths that were written.
 #[tauri::command]
 pub async fn export_tags(
     save_path: String,
     tag_names: Vec<String>,
     output_dir: String,
+    startgg: Option<StartggLink>,
 ) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut written = Vec::new();
@@ -126,6 +139,17 @@ pub async fn export_tags(
             let mut out_file = File::create(&out_path).map_err(|e| e.to_string())?;
             save.write(&mut out_file).map_err(|e| e.to_string())?;
             written.push(out_path.to_string_lossy().to_string());
+
+            // Write the website-style sidecar so the exported tag is upload-ready.
+            if let Some(link) = &startgg {
+                let sidecar = serde_json::json!({
+                    "name": tag_name,
+                    "startgg": { "slug": link.slug, "tag": link.tag },
+                });
+                let side_path = std::path::Path::new(&output_dir).join(format!("{stem}.json"));
+                let body = serde_json::to_string_pretty(&sidecar).map_err(|e| e.to_string())?;
+                std::fs::write(&side_path, body + "\n").map_err(|e| e.to_string())?;
+            }
         }
 
         Ok(written)

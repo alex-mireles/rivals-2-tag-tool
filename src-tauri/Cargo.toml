@@ -25,3 +25,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uesave = "0.7.1"
 tauri-plugin-dialog = "2"
+# native-tls uses schannel on Windows and Security.framework on macOS (the only
+# release targets), so it needs no bundled crypto/NASM the way rustls-tls would.
+reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls"] }

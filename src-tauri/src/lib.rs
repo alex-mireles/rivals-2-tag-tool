@@ -11,6 +11,8 @@ pub fn run() {
             commands::tags::export_tags,
             commands::tags::get_tag_previews,
             commands::tags::import_tags,
+            commands::startgg::startgg_search,
+            commands::startgg::startgg_user,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

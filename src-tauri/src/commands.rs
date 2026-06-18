@@ -1,3 +1,4 @@
+pub mod startgg;
 pub mod tags;
 
 use tauri::Manager;

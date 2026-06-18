@@ -78,6 +78,19 @@ Yes... but you should almost certainly close it. Rivals II does not reread from 
 
 It's a custom file containing a single player tag: the tag name and its custom control settings. Nothing else from your save (or your system) is included, so they're safe to share.
 
+**What's the start.gg account field on the Export screen?**
+
+Exporting links your tags to your start.gg account (search your gamer tag or paste your profile URL). Alongside each `.r2tag`, the tool writes a small `<tag>.json` sidecar recording the linked account, e.g.:
+
+```json
+{
+  "name": "JUGZ!",
+  "startgg": { "slug": "user/6192f6f1", "tag": "jugeeya" }
+}
+```
+
+This matches the format used by the tag-sharing website, so exported tags are ready to upload and can be pulled by start.gg bracket there. The lookup uses start.gg's public API and needs no login. The `.r2tag` itself is unchanged.
+
 **What happens if an imported tag already exists on the setup?**
 
 The import screen flags it as a conflict. Conflicts default to **Skip**; toggle individual tags to **Overwrite** if you want to replace the existing version.
