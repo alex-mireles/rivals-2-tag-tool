@@ -16,8 +16,10 @@ jobs:
         include:
           - platform: 'macos-latest' # for Arm based macs (M1 and above).
             args: '--target aarch64-apple-darwin'
+            uploadPlainBinary: false
           - platform: 'windows-latest'
-            args: ''
+            args: '--no-bundle'
+            uploadPlainBinary: true
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -49,13 +51,21 @@ jobs:
         # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
         run: pnpm install # change this to npm or pnpm depending on which one you use.
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-          releaseName: 'App v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: 'Rivals II Tag Tool v__VERSION__'
+          releaseBody: |
+            Download the asset for your platform:
+
+            - Windows: the portable `.exe`. No installation is required.
+            - macOS: the `.dmg`.
+
+            Windows portable builds require the Microsoft WebView2 Runtime, which is included with Windows 10 and Windows 11.
           releaseDraft: true
           prerelease: false
+          uploadPlainBinary: ${{ matrix.uploadPlainBinary }}
+          releaseAssetNamePattern: 'Rivals-II-Tag-Tool_[version]_[platform]_[arch][ext]'
           args: ${{ matrix.args }}
