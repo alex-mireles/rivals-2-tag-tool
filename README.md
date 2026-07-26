@@ -6,6 +6,16 @@ Export, share, and import Rivals of Aether II tags & custom controls. Stop re-en
 
 Runs on **Windows** and **macOS**.
 
+## Download
+
+Each GitHub release includes a portable Windows `.exe` that runs without
+installation and a macOS disk image. There is no Windows installer; run the
+downloaded `.exe` directly.
+
+The portable build uses the Microsoft WebView2 Runtime included with Windows 10
+and Windows 11. If it is missing from your system, install the
+[WebView2 Evergreen Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/consumer/).
+
 ## Usage
 
 **Players (at home):**
@@ -31,7 +41,7 @@ The app is built with [Tauri v2](https://v2.tauri.app/), using a Vue 3 + TypeScr
 ```sh
 pnpm install        # install frontend dependencies
 pnpm tauri dev      # run the app with hot reload
-pnpm tauri build    # produce a release build + installer
+pnpm tauri build    # produce a portable Windows build or macOS disk image
 pnpm lint           # lint the frontend
 cargo test --manifest-path src-tauri/Cargo.toml   # run backend tests
 ```
@@ -52,7 +62,7 @@ Use **Choose a Save File** to browse to it.
 
 **The Windows SmartScreen warning came up with "Windows protected your PC." Is that bad?**
 
-Currently the builds aren't code-signed, so Windows doesn't recognize me as the publisher. Click **More info → Run anyway** to install.
+Currently the builds aren't code-signed, so Windows doesn't recognize me as the publisher. Click **More info → Run anyway** to run the portable build.
 
 **macOS says the app "is damaged and can't be opened." What gives?**
 
