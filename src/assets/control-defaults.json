@@ -1,0 +1,464 @@
+{
+ "settings": {
+  "bAutoWalk": false,
+  "bDoubleTapDash": false,
+  "bDpadMovement": false,
+  "RightStickSetting": "Strong",
+  "AirGrabSetting": "Airdodge",
+  "AirParrySetting": "Nspecial",
+  "ItemTossSetting": "Grab",
+  "bTapJumpEnabled": false,
+  "bTapStrongEnabled": false,
+  "bTapWalljumpEnabled": false,
+  "bAutoShorthopAerial": false,
+  "bDiAssist": true,
+  "bDisableAirdodgeInTumble": false,
+  "bDisableItemPickupWithAttacks": false,
+  "bOnlyDashAttackWhenHoldingForward": true,
+  "RollSetting": "Default",
+  "bWavedashAssist": false,
+  "AirdodgeCardinalRoundingAngle": 20
+ },
+ "controllers": {
+  "Keyboard": {
+   "actions": {
+    "Accept": [
+     "SpaceBar",
+     "Z"
+    ],
+    "Action3": [
+     "C"
+    ],
+    "Action4": [
+     "V"
+    ],
+    "AdvanceFrame": [
+     "T"
+    ],
+    "Attack": [
+     "A"
+    ],
+    "Back": [
+     "X"
+    ],
+    "CancelBinding": [
+     "BackSpace"
+    ],
+    "Grab": [
+     "E"
+    ],
+    "Jump": [
+     "SpaceBar"
+    ],
+    "Parry": [
+     "Q"
+    ],
+    "Select": [
+     "BackSpace"
+    ],
+    "Shield": [
+     "F"
+    ],
+    "ShoulderLeft": [
+     "Q"
+    ],
+    "ShoulderRight": [
+     "E"
+    ],
+    "Special": [
+     "S"
+    ],
+    "Start": [
+     "Enter"
+    ],
+    "Strong": [
+     "D"
+    ],
+    "Taunt1": [
+     "One"
+    ],
+    "Taunt2": [
+     "Two"
+    ],
+    "Taunt3": [
+     "Three"
+    ],
+    "Taunt4": [
+     "Four"
+    ],
+    "TriggerLeft": [
+     "R"
+    ],
+    "TriggerRight": [
+     "F"
+    ],
+    "UIDPadDown": [
+     "Down"
+    ],
+    "UIDPadLeft": [
+     "Left"
+    ],
+    "UIDPadRight": [
+     "Right"
+    ],
+    "UIDPadUp": [
+     "Up"
+    ],
+    "UILeftTriggerAction": [
+     "R"
+    ],
+    "UIRightTriggerAction": [
+     "F"
+    ],
+    "Walk": [
+     "LeftShift"
+    ],
+    "AllTaunt": [
+     "None"
+    ],
+    "DownHard": [
+     "RivalsVirtualKey_DownHard"
+    ],
+    "FullHop": [
+     "None"
+    ],
+    "LeftHard": [
+     "RivalsVirtualKey_LeftHard"
+    ],
+    "ModX": [
+     "None"
+    ],
+    "ModY": [
+     "None"
+    ],
+    "RightHard": [
+     "RivalsVirtualKey_RightHard"
+    ],
+    "ShortHop": [
+     "None"
+    ],
+    "UpHard": [
+     "RivalsVirtualKey_UpHard"
+    ]
+   },
+   "axes": {
+    "TrueMoveHorizontal": [
+     "Left(x-1)",
+     "Right(x1)"
+    ],
+    "TrueMoveVertical": [
+     "Down(x-1)",
+     "Up(x1)"
+    ],
+    "UIHorizontal": [
+     "Left(x-1)",
+     "Right(x1)"
+    ],
+    "UIVertical": [
+     "Down(x-1)",
+     "Up(x1)"
+    ],
+    "MoveHorizontal": [
+     "RivalsVirtualKey_VirtualMoveHorizontal(x1)"
+    ],
+    "MoveVertical": [
+     "RivalsVirtualKey_VirtualMoveVertical(x1)"
+    ],
+    "AltUIVertical": [
+     "I(x1)",
+     "K(x-1)"
+    ],
+    "AltUIHorizontal": [
+     "J(x-1)",
+     "L(x1)"
+    ]
+   },
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "Standard": {
+   "actions": {
+    "Accept": [
+     "SDL_GAMEPAD_BUTTON_SOUTH"
+    ],
+    "Action3": [
+     "SDL_GAMEPAD_BUTTON_WEST"
+    ],
+    "Action4": [
+     "SDL_GAMEPAD_BUTTON_NORTH"
+    ],
+    "AdvanceFrame": [
+     "SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER"
+    ],
+    "Attack": [
+     "SDL_GAMEPAD_BUTTON_SOUTH"
+    ],
+    "Back": [
+     "SDL_GAMEPAD_BUTTON_EAST"
+    ],
+    "CancelBinding": [
+     "SDL_GAMEPAD_BUTTON_BACK"
+    ],
+    "Grab": [
+     "SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER"
+    ],
+    "Jump": [
+     "SDL_GAMEPAD_BUTTON_NORTH"
+    ],
+    "Parry": [
+     "SDL_GAMEPAD_BUTTON_LEFT_SHOULDER"
+    ],
+    "Select": [
+     "RivalsVirtualKey_Select",
+     "SDL_GAMEPAD_BUTTON_BACK"
+    ],
+    "Shield": [
+     "RivalsVirtualKey_LeftTrigger"
+    ],
+    "ShoulderLeft": [
+     "SDL_GAMEPAD_BUTTON_LEFT_SHOULDER"
+    ],
+    "ShoulderRight": [
+     "SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER"
+    ],
+    "Special": [
+     "SDL_GAMEPAD_BUTTON_WEST"
+    ],
+    "Start": [
+     "SDL_GAMEPAD_BUTTON_START"
+    ],
+    "Strong": [
+     "SDL_GAMEPAD_BUTTON_EAST"
+    ],
+    "Taunt1": [
+     "SDL_GAMEPAD_BUTTON_DPAD_UP"
+    ],
+    "Taunt2": [
+     "SDL_GAMEPAD_BUTTON_DPAD_LEFT"
+    ],
+    "Taunt3": [
+     "SDL_GAMEPAD_BUTTON_DPAD_RIGHT"
+    ],
+    "Taunt4": [
+     "SDL_GAMEPAD_BUTTON_DPAD_DOWN"
+    ],
+    "TriggerLeft": [
+     "RivalsVirtualKey_LeftTrigger"
+    ],
+    "TriggerRight": [
+     "RivalsVirtualKey_RightTrigger"
+    ],
+    "UIDPadDown": [
+     "SDL_GAMEPAD_BUTTON_DPAD_DOWN"
+    ],
+    "UIDPadLeft": [
+     "SDL_GAMEPAD_BUTTON_DPAD_LEFT"
+    ],
+    "UIDPadRight": [
+     "SDL_GAMEPAD_BUTTON_DPAD_RIGHT"
+    ],
+    "UIDPadUp": [
+     "SDL_GAMEPAD_BUTTON_DPAD_UP"
+    ],
+    "UILeftTriggerAction": [
+     "RivalsVirtualKey_UILeftTrigger"
+    ],
+    "UIRightTriggerAction": [
+     "RivalsVirtualKey_UIRightTrigger"
+    ],
+    "Shield2": [
+     "RivalsVirtualKey_RightTrigger"
+    ]
+   },
+   "axes": {
+    "TrueMoveHorizontal": [
+     "SDL_GAMEPAD_AXIS_LEFTX(x1)"
+    ],
+    "TrueMoveVertical": [
+     "SDL_GAMEPAD_AXIS_LEFTY(x1)"
+    ],
+    "UIHorizontal": [
+     "SDL_GAMEPAD_AXIS_LEFTX(x1)",
+     "SDL_GAMEPAD_BUTTON_DPAD_LEFT(x-1)",
+     "SDL_GAMEPAD_BUTTON_DPAD_RIGHT(x1)"
+    ],
+    "UIVertical": [
+     "SDL_GAMEPAD_AXIS_LEFTY(x1)",
+     "SDL_GAMEPAD_BUTTON_DPAD_DOWN(x-1)",
+     "SDL_GAMEPAD_BUTTON_DPAD_UP(x1)"
+    ],
+    "AltUIHorizontal": [
+     "SDL_GAMEPAD_AXIS_RIGHTX(x1)"
+    ],
+    "AltUIVertical": [
+     "SDL_GAMEPAD_AXIS_RIGHTY(x-1)"
+    ],
+    "LeftTrigger": [
+     "SDL_GAMEPAD_AXIS_LEFT_TRIGGER(x1)"
+    ],
+    "RightStickHorizontal": [
+     "SDL_GAMEPAD_AXIS_RIGHTX(x1)"
+    ],
+    "RightStickVertical": [
+     "SDL_GAMEPAD_AXIS_RIGHTY(x-1)"
+    ],
+    "RightTrigger": [
+     "SDL_GAMEPAD_AXIS_RIGHT_TRIGGER(x1)"
+    ],
+    "UILeftTriggerAxis": [
+     "SDL_GAMEPAD_AXIS_LEFT_TRIGGER(x1)"
+    ],
+    "UIRightTriggerAxis": [
+     "SDL_GAMEPAD_AXIS_RIGHT_TRIGGER(x1)"
+    ]
+   },
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "Xbox360": {
+   "actions": {
+    "Parry": [
+     "SDL_GAMEPAD_BUTTON_LEFT_SHOULDER"
+    ],
+    "Strong": [
+     "SDL_GAMEPAD_BUTTON_EAST"
+    ],
+    "Special": [
+     "SDL_GAMEPAD_BUTTON_WEST"
+    ]
+   },
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "NintendoSwitchPro": {
+   "actions": {
+    "Accept": [
+     "SDL_GAMEPAD_BUTTON_EAST"
+    ],
+    "Back": [
+     "SDL_GAMEPAD_BUTTON_SOUTH"
+    ]
+   },
+   "axes": {},
+   "sensitivity": {
+    "max": 1.2,
+    "values": [
+     1.2
+    ]
+   }
+  },
+  "GameCube": {
+   "actions": {
+    "Action3": [
+     "SDL_GAMEPAD_BUTTON_EAST"
+    ],
+    "Back": [
+     "SDL_GAMEPAD_BUTTON_WEST"
+    ],
+    "CancelBinding": [
+     "SDL_GAMEPAD_BUTTON_DPAD_DOWN"
+    ]
+   },
+   "axes": {},
+   "sensitivity": {
+    "max": 1.3,
+    "values": [
+     1.3
+    ]
+   }
+  },
+  "Unknown": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "XboxOne": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "PS3": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "PS4": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "PS5": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "NintendoSwitchJoyConLeft": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "NintendoSwitchJoyConRight": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  },
+  "NintendoSwitchJoyConPair": {
+   "actions": {},
+   "axes": {},
+   "sensitivity": {
+    "max": 1,
+    "values": [
+     1
+    ]
+   }
+  }
+ }
+}

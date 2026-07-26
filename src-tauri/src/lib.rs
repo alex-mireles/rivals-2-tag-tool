@@ -10,6 +10,7 @@ pub fn run() {
             commands::tags::get_tag_names,
             commands::tags::export_tags,
             commands::tags::get_tag_previews,
+            commands::tags::read_tag_json,
             commands::tags::import_tags,
             commands::startgg::startgg_search,
             commands::startgg::startgg_user,

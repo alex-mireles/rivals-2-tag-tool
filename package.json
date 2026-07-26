@@ -8,7 +8,8 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test": "node --experimental-strip-types --no-warnings --test \"src/**/*.test.mts\""
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

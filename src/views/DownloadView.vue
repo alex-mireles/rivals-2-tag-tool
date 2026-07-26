@@ -41,12 +41,16 @@ const loadingList = ref(false);
 const listError = ref('');
 
 const bracketUrl = ref('');
+/** Entrants in the looked-up bracket who have no published tag. */
+const bracketMisses = ref<EventEntrant[]>([]);
 const bracketBusy = ref(false);
 const bracketStatus = ref('');
 const bracketStatusKind = ref<'' | 'success' | 'warn' | 'error'>('');
 
 const downloading = ref(false);
 const paths = ref<string[]>([]);
+/** Downloaded file path -> the publisher's start.gg handle, for collisions. */
+const startggHandles = ref<Record<string, string>>({});
 const downloadResult = ref<{ count: number; dir: string } | null>(null);
 
 const allSelected = computed(
@@ -80,6 +84,7 @@ function toggleAll() {
 async function findBracket() {
   bracketStatus.value = '';
   bracketStatusKind.value = '';
+  bracketMisses.value = [];
   if (!bracketUrl.value.trim()) return;
   bracketBusy.value = true;
   try {
@@ -87,6 +92,19 @@ async function findBracket() {
     const slugs = new Set(res.entrants.map(e => e.slug));
     const matches = sharedTags.value.filter(t => t.startggSlug && slugs.has(t.startggSlug));
     selected.value = new Set(matches.map(t => t.file));
+
+    // Entrants whose linked start.gg account has no published tag — the
+    // "who do I still need to chase down" list for a TO.
+    const taggedSlugs = new Set(
+      sharedTags.value.filter(t => t.startggSlug).map(t => t.startggSlug),
+    );
+    const seen = new Set<string>();
+    bracketMisses.value = res.entrants.filter(e => {
+      if (!e.slug || seen.has(e.slug)) return false;
+      seen.add(e.slug);
+      return !taggedSlugs.has(e.slug);
+    });
+
     const evName = res.event ? ` for “${res.event}”` : '';
     if (matches.length === 0) {
       bracketStatus.value = `No published tags match the ${slugs.size} linked entrant(s)${evName}.`;
@@ -110,10 +128,18 @@ async function importToSave() {
   listError.value = '';
   await nextTick();
   try {
-    paths.value = await invoke<string[]>('download_tags', {
-      files: [...selected.value],
-      destDir: null,
+    const files = [...selected.value];
+    paths.value = await invoke<string[]>('download_tags', { files, destDir: null });
+    // Remember each downloaded file's start.gg handle. Two entrants can pick
+    // the same in-game tag name by coincidence; the handle is what lets the
+    // import disambiguate them instead of one overwriting the other.
+    const byFile = new Map(sharedTags.value.map(t => [t.file, t.startggTag]));
+    const handles: Record<string, string> = {};
+    paths.value.forEach((p, i) => {
+      const tag = byFile.get(files[i]);
+      if (tag) handles[p] = tag;
     });
+    startggHandles.value = handles;
   } catch (err) {
     listError.value = String(err);
   } finally {
@@ -185,6 +211,7 @@ function tagSub(t: SharedTag): string {
           :save-path="savePath"
           :existing-tag-names="tagNames"
           :paths="paths"
+          :startgg-handles="startggHandles"
           @restart="backToBrowse"
         />
       </div>
@@ -211,6 +238,18 @@ function tagSub(t: SharedTag): string {
           <p v-if="bracketStatus" class="bracket-status" :class="`bracket-status--${bracketStatusKind}`">
             {{ bracketStatus }}
           </p>
+
+          <!-- Who in this bracket still has no published tag. Collapsed by
+               default: it's a follow-up list, not an error. -->
+          <details v-if="bracketMisses.length > 0" class="bracket-misses">
+            <summary>
+              {{ bracketMisses.length }} entrant{{ bracketMisses.length === 1 ? '' : 's' }}
+              without a published tag
+            </summary>
+            <p class="bracket-misses-body">
+              {{ bracketMisses.map(e => e.gamerTag || e.entrant || e.slug).join(', ') }}
+            </p>
+          </details>
         </div>
 
         <div class="tag-panel">
@@ -325,6 +364,28 @@ function tagSub(t: SharedTag): string {
     opacity: 0.4;
     cursor: not-allowed;
   }
+}
+
+.bracket-misses {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+
+  summary {
+    cursor: pointer;
+    opacity: 0.7;
+    user-select: none;
+
+    &:hover {
+      opacity: 1;
+    }
+  }
+}
+
+.bracket-misses-body {
+  margin: 0.3rem 0 0;
+  padding-left: 0.9rem;
+  opacity: 0.75;
+  line-height: 1.5;
 }
 
 .bracket-status {

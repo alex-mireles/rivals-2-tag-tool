@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import TagDiff from './TagDiff.vue';
 
 interface TagPreview {
   path: string;
@@ -26,6 +27,12 @@ const props = defineProps<{
   existingTagNames: string[];
   /** .r2tag files to preview + import. Empty renders nothing. */
   paths: string[];
+  /**
+   * Optional file path -> publisher's start.gg handle. Supplied for tags pulled
+   * from the shared database; used to tell apart two people who happen to have
+   * chosen the same in-game tag name.
+   */
+  startggHandles?: Record<string, string>;
 }>();
 
 const emit = defineEmits<{ restart: [] }>();
@@ -43,8 +50,40 @@ const compatiblePreviews = computed(() => previews.value.filter(p => p.compatibl
 const incompatibleCount = computed(() => previews.value.length - compatiblePreviews.value.length);
 const hasCompatible = computed(() => compatiblePreviews.value.length > 0);
 
+/**
+ * Two different people can end up with the same in-game tag name by pure
+ * coincidence — it's just text they typed, unrelated to their start.gg account.
+ * A save holds one tag per name, so without help the second import would
+ * overwrite (or be skipped behind) the first. Where we know a start.gg handle
+ * for a colliding tag, install it under that handle instead so both land.
+ * Tags with no known handle keep the plain overwrite/skip behaviour.
+ */
+const renames = computed(() => {
+  const byName = new Map<string, TagPreview[]>();
+  for (const p of compatiblePreviews.value) {
+    if (!byName.has(p.tag_name)) byName.set(p.tag_name, []);
+    byName.get(p.tag_name)!.push(p);
+  }
+  const out: Record<string, string> = {};
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    for (const p of group) {
+      const handle = props.startggHandles?.[p.path];
+      if (handle && handle !== p.tag_name) out[p.path] = handle;
+    }
+  }
+  return out;
+});
+
 const conflictNames = computed(() =>
-  new Set(compatiblePreviews.value.map(p => p.tag_name).filter(n => props.existingTagNames.includes(n)))
+  new Set(
+    compatiblePreviews.value
+      // A renamed tag goes in under a different name, so it no longer collides
+      // with whatever is already in the save under its original name.
+      .filter(p => !renames.value[p.path])
+      .map(p => p.tag_name)
+      .filter(n => props.existingTagNames.includes(n)),
+  )
 );
 const hasConflicts = computed(() => conflictNames.value.size > 0);
 const allOverwrite = computed(() =>
@@ -102,6 +141,7 @@ async function doImport() {
       path: p.path,
       tag_name: p.tag_name,
       overwrite: !conflictNames.value.has(p.tag_name) || overwriteSet.value.has(p.tag_name),
+      rename: renames.value[p.path] ?? null,
     }));
     result.value = await invoke<ImportResult>('import_tags', {
       savePath: props.savePath,
@@ -178,8 +218,16 @@ function importMore() {
             :class="{ 'tag-row--incompatible': !preview.compatible }"
           >
             <div class="tag-info">
-              <span class="tag-name">{{ preview.tag_name }}</span>
+              <span class="tag-name">
+                {{ preview.tag_name }}
+                <!-- Renamed to keep two same-named tags apart; say so plainly. -->
+                <span v-if="renames[preview.path]" class="tag-renamed">
+                  → installs as “{{ renames[preview.path] }}”
+                </span>
+              </span>
               <span class="tag-source">{{ preview.path.split(/[\\/]/).pop() }}</span>
+              <!-- Only meaningful for tags we can actually read into this save. -->
+              <TagDiff v-if="preview.compatible" :path="preview.path" />
             </div>
 
             <div v-if="!preview.compatible" class="incompatible-tag-badge">
@@ -296,6 +344,11 @@ function importMore() {
 
 .tag-name {
   font-size: 1.4em;
+}
+
+.tag-renamed {
+  font-size: 0.6em;
+  color: var(--text-muted);
 }
 
 .tag-source {

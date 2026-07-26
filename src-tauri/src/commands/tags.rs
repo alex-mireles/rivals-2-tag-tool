@@ -51,6 +51,16 @@ fn tag_name_of(sv: &StructValue) -> Option<&str> {
     None
 }
 
+/// Rename a tag in place, so two people sharing an in-game tag name can both be
+/// installed (the caller supplies the disambiguated name, e.g. a start.gg tag).
+fn set_tag_name(sv: &mut StructValue, name: &str) {
+    if let StructValue::Struct(props) = sv {
+        if let Some(Property::Str(existing)) = props.0.get_mut(&PropertyKey::from("TagName")) {
+            *existing = name.to_string();
+        }
+    }
+}
+
 /// Read the root `SaveVersion` (save-format version) from a save. Both `.sav`
 /// files and `.r2tag` files (which are full saves) carry this. Returns `None`
 /// if the property is absent or not an integer.
@@ -234,11 +244,34 @@ pub async fn get_tag_previews(
     .map_err(|e| e.to_string())?
 }
 
+/// The parsed contents of a `.r2tag` (or save) as JSON, for the control-diff
+/// view: "what did this tag change from the defaults?".
+///
+/// This is uesave's own serialization, which is exactly what the tag-sharing
+/// website's WASM build returns — so `src/lib/tagdiff.ts` is a straight port of
+/// the site's `tagdiff.js` and the two can't drift on shape.
+#[tauri::command]
+pub async fn read_tag_json(path: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = File::open(&path).map_err(|e| e.to_string())?;
+        let mut reader = BufReader::new(file);
+        let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+        serde_json::to_value(&save.root).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImportInstruction {
     pub path: String,
     pub tag_name: String,
     pub overwrite: bool,
+    /// Install the tag under a different in-save name. Used when two people
+    /// share an in-game tag name — without it the second install would collide
+    /// with (and overwrite, or be skipped against) the first.
+    #[serde(default)]
+    pub rename: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -274,10 +307,22 @@ pub async fn import_tags(
                 _ => return Err("SavedPlayerTags is not a struct array in destination save".into()),
             };
 
+            // Where the next installed tag goes. Slot 0 is the player's own tag
+            // — the game treats it as theirs — so installs never displace it;
+            // they land directly after it, in the order they were chosen.
+            let mut insert_at = if dest_structs.is_empty() { 0 } else { 1 };
+
             for instruction in instructions {
+                // The name it will actually carry in the save: `rename` lets two
+                // people who share an in-game tag name both be installed.
+                let install_name = instruction
+                    .rename
+                    .clone()
+                    .unwrap_or_else(|| instruction.tag_name.clone());
+
                 let existing_pos = dest_structs
                     .iter()
-                    .position(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()));
+                    .position(|sv| tag_name_of(sv) == Some(install_name.as_str()));
 
                 if existing_pos.is_some() && !instruction.overwrite {
                     skipped.push(instruction.tag_name);
@@ -301,19 +346,28 @@ pub async fn import_tags(
                     _ => return Err(format!("{}: unexpected format", instruction.path)),
                 };
 
-                let tag_sv = source_structs
+                let mut tag_sv = source_structs
                     .iter()
                     .find(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()))
                     .ok_or_else(|| format!("{}: tag '{}' not found", instruction.path, instruction.tag_name))?
                     .clone();
 
-                if let Some(pos) = existing_pos {
-                    dest_structs[pos] = tag_sv;
-                } else {
-                    dest_structs.push(tag_sv);
+                if instruction.rename.is_some() {
+                    set_tag_name(&mut tag_sv, &install_name);
                 }
 
-                imported.push(instruction.tag_name);
+                match existing_pos {
+                    // Overwrite in place — including slot 0, whose content may be
+                    // replaced even though nothing is allowed to displace it.
+                    Some(pos) => dest_structs[pos] = tag_sv,
+                    None => {
+                        let at = insert_at.min(dest_structs.len());
+                        dest_structs.insert(at, tag_sv);
+                        insert_at = at + 1;
+                    }
+                }
+
+                imported.push(install_name);
             }
         }
 
