@@ -11,6 +11,7 @@ pub fn run() {
             commands::tags::export_tags,
             commands::tags::get_tag_previews,
             commands::tags::read_tag_json,
+            commands::tags::read_tag_json_from_save,
             commands::tags::import_tags,
             commands::startgg::startgg_search,
             commands::startgg::startgg_user,

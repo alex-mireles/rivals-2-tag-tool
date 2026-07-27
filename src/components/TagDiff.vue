@@ -11,8 +11,11 @@ import { invoke } from '@tauri-apps/api/core';
 import { diffTag, type TagDiff } from '../lib/tagDefaults';
 
 const props = defineProps<{
-  /** Path to a .r2tag file on disk. */
-  path: string;
+  /** Path to a .r2tag file on disk. Mutually exclusive with savePath+tagName. */
+  path?: string;
+  /** A tag already inside a save: the save's path plus the tag's name. */
+  savePath?: string;
+  tagName?: string;
 }>();
 
 const diff = ref<TagDiff | null>(null);
@@ -25,7 +28,12 @@ async function onToggle(ev: Event) {
   loading.value = true;
   errorMsg.value = '';
   try {
-    const root = await invoke<unknown>('read_tag_json', { path: props.path });
+    const root = props.path
+      ? await invoke<unknown>('read_tag_json', { path: props.path })
+      : await invoke<unknown>('read_tag_json_from_save', {
+          savePath: props.savePath,
+          tagName: props.tagName,
+        });
     diff.value = diffTag(root);
     loaded.value = true;
   } catch (err) {

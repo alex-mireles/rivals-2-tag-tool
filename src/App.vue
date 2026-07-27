@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import LoadView from './views/LoadView.vue';
+import HomeView from './views/HomeView.vue';
 import ExportView from './views/ExportView.vue';
-import ImportView from './views/ImportView.vue';
 import ShareView from './views/ShareView.vue';
-import DownloadView from './views/DownloadView.vue';
 import type { SaveFileState } from './types';
 
 const appWindow = getCurrentWindow();
 
-type ViewName = 'load' | 'export' | 'import' | 'share' | 'download';
+// Home does the everyday work (see your tags, get new ones). Sharing and
+// exporting to file are real but secondary, so they stay as their own screens
+// reached from a tag's row rather than as top-level choices.
+type ViewName = 'home' | 'share' | 'export';
 
-const currentView = ref<ViewName>('load');
+const currentView = ref<ViewName>('home');
 const transitionName = ref('slide-forward');
 
 const saveFileState = ref<SaveFileState>({
@@ -29,7 +30,7 @@ function navigateTo(view: ViewName) {
 
 function goBack() {
   transitionName.value = 'slide-back';
-  currentView.value = 'load';
+  currentView.value = 'home';
 }
 </script>
 
@@ -52,26 +53,12 @@ function goBack() {
 
   <div class="viewport">
     <Transition :name="transitionName" mode="out-in">
-      <LoadView
-        v-if="currentView === 'load'"
-        key="load"
-        :initial-state="saveFileState"
+      <HomeView
+        v-if="currentView === 'home'"
+        key="home"
         @state-change="(s: SaveFileState) => (saveFileState = s)"
-        @navigate="navigateTo"
-      />
-      <ExportView
-        v-else-if="currentView === 'export'"
-        key="export"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-      />
-      <ImportView
-        v-else-if="currentView === 'import'"
-        key="import"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
+        @share="navigateTo('share')"
+        @export="navigateTo('export')"
       />
       <ShareView
         v-else-if="currentView === 'share'"
@@ -80,9 +67,9 @@ function goBack() {
         :tag-names="saveFileState.tagNames"
         @go-back="goBack"
       />
-      <DownloadView
+      <ExportView
         v-else
-        key="download"
+        key="export"
         :save-path="saveFileState.savePath"
         :tag-names="saveFileState.tagNames"
         @go-back="goBack"
