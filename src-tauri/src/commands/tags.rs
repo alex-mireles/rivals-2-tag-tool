@@ -73,28 +73,13 @@ fn save_version(save: &Save) -> Option<i32> {
 
 #[tauri::command]
 pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let file = File::open(&save_path).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(file);
-        let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-        let tag_structs = match &save.root.properties["SavedPlayerTags"] {
-            Property::Array(ValueVec::Struct(structs)) => structs,
-            Property::Array(_) => return Err("SavedPlayerTags array does not contain structs".into()),
-            _ => return Err("SavedPlayerTags is not an array".into()),
-        };
-
-        let tag_names = tag_structs
-            .iter()
-            .filter_map(|sv| tag_name_of(sv))
-            .filter(|name| is_custom_tag(name))
-            .map(|name| name.to_string())
-            .collect();
-
-        Ok(tag_names)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    // Reads through the same cache the control diff uses, so opening the app and
+    // then expanding a tag costs one parse of the save, not two. Parsing is the
+    // expensive part: ~0.5s for a 9 MB save in a release build (and several
+    // times that under `tauri dev`, which is a debug build).
+    tauri::async_runtime::spawn_blocking(move || Ok(save_cache(&save_path)?.names))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// A start.gg account linked to the tags being exported.
@@ -250,26 +235,30 @@ pub async fn get_tag_previews(
 /// This is uesave's own serialization, which is exactly what the tag-sharing
 /// website's WASM build returns — so `src/lib/tagdiff.ts` is a straight port of
 /// the site's `tagdiff.js` and the two can't drift on shape.
-/// One entry per tag in a save, each shaped like a `.r2tag`'s tree so the
-/// frontend can use a single code path. Built once per save file.
-type TagTrees = std::collections::HashMap<String, serde_json::Value>;
+/// What one parse of a save yields: the custom tag names, and per tag a tree
+/// shaped exactly like a `.r2tag`'s so the frontend has a single code path.
+#[derive(Clone)]
+struct SaveCache {
+    names: Vec<String>,
+    trees: std::collections::HashMap<String, serde_json::Value>,
+}
 
-/// The save is tens of megabytes and holds every tag, so parsing it again for
-/// each tag the user expands is the difference between instant and a visible
-/// stall. Parse once per (path, mtime) and keep the per-tag trees around;
-/// editing the save changes its mtime, which invalidates this by itself.
-static SAVE_TREES: std::sync::Mutex<Option<(String, std::time::SystemTime, TagTrees)>> =
+/// A save is tens of megabytes and parsing it dominates every operation here
+/// (~0.5s for 9 MB in release, several seconds in a debug build), so parse it
+/// once per (path, mtime) and answer everything else from memory. Writing to
+/// the save changes its mtime, which invalidates this on its own.
+static SAVE_CACHE: std::sync::Mutex<Option<(String, std::time::SystemTime, SaveCache)>> =
     std::sync::Mutex::new(None);
 
-fn tag_trees_for(save_path: &str) -> Result<TagTrees, String> {
+fn save_cache(save_path: &str) -> Result<SaveCache, String> {
     let mtime = std::fs::metadata(save_path)
         .and_then(|m| m.modified())
         .map_err(|e| e.to_string())?;
 
-    if let Ok(guard) = SAVE_TREES.lock() {
-        if let Some((path, cached_mtime, trees)) = guard.as_ref() {
+    if let Ok(guard) = SAVE_CACHE.lock() {
+        if let Some((path, cached_mtime, cache)) = guard.as_ref() {
             if path == save_path && *cached_mtime == mtime {
-                return Ok(trees.clone());
+                return Ok(cache.clone());
             }
         }
     }
@@ -277,19 +266,21 @@ fn tag_trees_for(save_path: &str) -> Result<TagTrees, String> {
     let file = File::open(save_path).map_err(|e| e.to_string())?;
     let mut reader = BufReader::new(file);
     let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-    let save_game_type = serde_json::to_value(&save.root.save_game_type)
-        .map_err(|e| e.to_string())?;
+    let save_game_type =
+        serde_json::to_value(&save.root.save_game_type).map_err(|e| e.to_string())?;
 
-    let names: Vec<String> = match &save.root.properties["SavedPlayerTags"] {
+    // Every tag in file order, so the serialized array below lines up.
+    let all_names: Vec<String> = match &save.root.properties["SavedPlayerTags"] {
         Property::Array(ValueVec::Struct(structs)) => structs
             .iter()
             .map(|sv| tag_name_of(sv).unwrap_or_default().to_string())
             .collect(),
-        _ => return Err("SavedPlayerTags is not a struct array".into()),
+        Property::Array(_) => {
+            return Err("SavedPlayerTags array does not contain structs".into())
+        }
+        _ => return Err("SavedPlayerTags is not an array".into()),
     };
 
-    // Serialize the whole array once, then hand each tag its own minimal root —
-    // identical in shape to what `read_tag_json` returns for a .r2tag.
     let root = serde_json::to_value(&save.root).map_err(|e| e.to_string())?;
     let array = root
         .get("properties")
@@ -297,8 +288,8 @@ fn tag_trees_for(save_path: &str) -> Result<TagTrees, String> {
         .and_then(|v| v.as_array())
         .ok_or("SavedPlayerTags_0 missing from serialized save")?;
 
-    let mut trees = TagTrees::new();
-    for (name, value) in names.iter().zip(array.iter()) {
+    let mut trees = std::collections::HashMap::new();
+    for (name, value) in all_names.iter().zip(array.iter()) {
         if name.is_empty() {
             continue;
         }
@@ -311,10 +302,19 @@ fn tag_trees_for(save_path: &str) -> Result<TagTrees, String> {
         );
     }
 
-    if let Ok(mut guard) = SAVE_TREES.lock() {
-        *guard = Some((save_path.to_string(), mtime, trees.clone()));
+    let cache = SaveCache {
+        names: all_names
+            .iter()
+            .filter(|n| is_custom_tag(n))
+            .cloned()
+            .collect(),
+        trees,
+    };
+
+    if let Ok(mut guard) = SAVE_CACHE.lock() {
+        *guard = Some((save_path.to_string(), mtime, cache.clone()));
     }
-    Ok(trees)
+    Ok(cache)
 }
 
 /// Same as `read_tag_json`, but for a tag that lives inside the loaded save
@@ -326,8 +326,8 @@ pub async fn read_tag_json_from_save(
     tag_name: String,
 ) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let trees = tag_trees_for(&save_path)?;
-        trees
+        save_cache(&save_path)?
+            .trees
             .get(&tag_name)
             .cloned()
             .ok_or_else(|| format!("tag '{tag_name}' not found in save"))

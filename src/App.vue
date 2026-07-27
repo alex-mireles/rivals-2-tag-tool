@@ -1,37 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import HomeView from './views/HomeView.vue';
-import ExportView from './views/ExportView.vue';
-import ShareView from './views/ShareView.vue';
-import type { SaveFileState } from './types';
 
 const appWindow = getCurrentWindow();
 
-// Home does the everyday work (see your tags, get new ones). Sharing and
-// exporting to file are real but secondary, so they stay as their own screens
-// reached from a tag's row rather than as top-level choices.
-type ViewName = 'home' | 'share' | 'export';
-
-const currentView = ref<ViewName>('home');
-const transitionName = ref('slide-forward');
-
-const saveFileState = ref<SaveFileState>({
-  savePath: '',
-  savePathError: false,
-  tagNames: [],
-  hasLoaded: false,
-});
-
-function navigateTo(view: ViewName) {
-  transitionName.value = 'slide-forward';
-  currentView.value = view;
-}
-
-function goBack() {
-  transitionName.value = 'slide-back';
-  currentView.value = 'home';
-}
+// Everything happens on one screen now — submitting your tags and installing
+// other people's are two columns, not two destinations — so there is no view
+// switching left to do.
 </script>
 
 <template>
@@ -52,57 +27,6 @@ function goBack() {
   </div>
 
   <div class="viewport">
-    <Transition :name="transitionName" mode="out-in">
-      <HomeView
-        v-if="currentView === 'home'"
-        key="home"
-        @state-change="(s: SaveFileState) => (saveFileState = s)"
-        @share="navigateTo('share')"
-        @export="navigateTo('export')"
-      />
-      <ShareView
-        v-else-if="currentView === 'share'"
-        key="share"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-      />
-      <ExportView
-        v-else
-        key="export"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-      />
-    </Transition>
+    <HomeView />
   </div>
 </template>
-
-<style scoped lang="scss">
-.slide-forward-enter-active,
-.slide-forward-leave-active,
-.slide-back-enter-active,
-.slide-back-leave-active {
-  transition: opacity 0.25s ease, transform 0.3s ease;
-}
-
-.slide-forward-enter-from {
-  opacity: 0;
-  transform: translateX(40px);
-}
-
-.slide-forward-leave-to {
-  opacity: 0;
-  transform: translateX(-40px);
-}
-
-.slide-back-enter-from {
-  opacity: 0;
-  transform: translateX(-40px);
-}
-
-.slide-back-leave-to {
-  opacity: 0;
-  transform: translateX(40px);
-}
-</style>

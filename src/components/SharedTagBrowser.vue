@@ -6,6 +6,7 @@
 
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import TagDiff from './TagDiff.vue';
 
 export interface SharedTag {
@@ -58,6 +59,11 @@ async function load() {
   }
 }
 
+/** Open a publisher's start.gg profile, the way the website's @handles do. */
+function openProfile(slug: string) {
+  if (slug) openUrl(`https://start.gg/${slug}`);
+}
+
 onMounted(load);
 defineExpose({ reload: load });
 </script>
@@ -79,21 +85,32 @@ defineExpose({ reload: load });
 
     <ul v-else class="browser-list">
       <li v-for="t in filtered" :key="t.file" class="browser-row">
-        <label class="browser-main">
-          <input
-            type="checkbox"
-            :checked="selected.has(t.file)"
-            @change="emit('toggle', t.file)"
-          />
-          <span class="browser-name">{{ t.name }}</span>
-          <span v-if="t.startggTag" class="browser-startgg">{{ t.startggTag }}</span>
-        </label>
+        <div class="browser-main" @click="emit('toggle', t.file)">
+          <span
+            class="tag-checkbox"
+            :class="{ 'tag-checkbox--checked': selected.has(t.file) }"
+            aria-hidden="true"
+          >
+            <svg v-if="selected.has(t.file)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+            </svg>
+          </span>
+          <span class="tag-name browser-name">{{ t.name }}</span>
+          <button
+            v-if="t.startggTag"
+            class="browser-startgg"
+            title="Open on start.gg"
+            @click.stop="openProfile(t.startggSlug)"
+          >@{{ t.startggTag }}</button>
+        </div>
         <TagDiff
           v-if="previewPaths && previewPaths[t.file]"
           :path="previewPaths[t.file]"
           class="browser-diff"
         />
-        <button v-else class="browser-peek" @click="emit('preview', t.file)">changes</button>
+        <button v-else class="browser-peek" @click="emit('preview', t.file)">
+          <span class="browser-peek-arrow" aria-hidden="true">▸</span> changes
+        </button>
       </li>
     </ul>
   </div>
@@ -170,17 +187,46 @@ defineExpose({ reload: load });
 
 .browser-main {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.4em;
   cursor: pointer;
 }
 
-.browser-name {
-  color: var(--text-primary);
+/* Drawn, not native — a browser checkbox is a bright OS control on this card. */
+.tag-checkbox {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  color: #fff;
+
+  &--checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
 }
 
 .browser-startgg {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
   color: var(--text-muted);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+  }
+}
+
+.browser-peek-arrow {
+  display: inline-block;
+  font-size: 0.85em;
 }
 
 .browser-peek {

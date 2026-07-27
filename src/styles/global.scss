@@ -142,6 +142,35 @@ button:focus-visible {
   }
 }
 
+// The platform scrollbar is a bright slab against these dark panels; make it a
+// thin, quiet track that only really shows on hover.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 // Shell rendered by AnimatedCard.vue; its inline height tracks .card-content.
 .card {
   width: 500px;

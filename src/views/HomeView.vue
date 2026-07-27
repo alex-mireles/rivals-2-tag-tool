@@ -11,22 +11,20 @@
 // Export and import-to-file still exist, but as a per-tag action and the last
 // "or" — sharing to and installing from the database is what people come for.
 
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { ref, reactive, computed, onMounted, nextTick, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import AnimatedCard from '../components/AnimatedCard.vue';
+import StartggLink from '../components/StartggLink.vue';
 import TagDiff from '../components/TagDiff.vue';
 import TagImportPanel from '../components/TagImportPanel.vue';
 import SharedTagBrowser, { type SharedTag } from '../components/SharedTagBrowser.vue';
-import type { SaveFileState } from '../types';
+import type { SaveFileState, StartggLinkValue } from '../types';
 
 const EXPECTED_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
 
-const emit = defineEmits<{
-  share: [];
-  export: [];
-  stateChange: [state: SaveFileState];
-}>();
+const emit = defineEmits<{ stateChange: [state: SaveFileState] }>();
 
 const savePath = ref('');
 const savePathError = ref(false);
@@ -44,6 +42,13 @@ const bracketBusy = ref(false);
 const bracketStatus = ref('');
 const bracketStatusKind = ref<'' | 'success' | 'warn' | 'error'>('');
 const bracketMisses = ref<{ entrant: string; gamerTag: string; slug: string }[]>([]);
+
+// Submitting happens on this page: pick tags on the left, link each to a
+// start.gg account, send. No separate screen to bounce through.
+const included = ref<Set<string>>(new Set());
+const links = reactive<Record<string, StartggLinkValue | null>>({});
+const sharing = ref(false);
+const shareResult = ref<{ pr: string; number: number; count: number } | null>(null);
 
 const importPaths = ref<string[]>([]);
 const busy = ref(false);
@@ -103,6 +108,67 @@ async function chooseSaveFile() {
   savePathError.value = (filePath.split(/[\\/]/).pop() ?? '') !== EXPECTED_SAVE_FILE_NAME;
   tagNames.value = [];
   if (!savePathError.value) await readTags();
+}
+
+// ---- submitting your tags --------------------------------------------------
+
+const includedNames = computed(() => tagNames.value.filter(n => included.value.has(n)));
+const allLinked = computed(
+  () => includedNames.value.length > 0 && includedNames.value.every(n => !!links[n]?.slug),
+);
+const missingLinks = computed(() => includedNames.value.filter(n => !links[n]?.slug).length);
+
+function toggleMine(name: string) {
+  const next = new Set(included.value);
+  if (next.has(name)) next.delete(name);
+  else {
+    next.add(name);
+    if (!(name in links)) links[name] = null;
+  }
+  included.value = next;
+}
+
+async function submitTags() {
+  saveError.value = '';
+  sharing.value = true;
+  await nextTick();
+  try {
+    const items = includedNames.value.map(name => ({
+      tagName: name,
+      startgg: links[name] as StartggLinkValue,
+    }));
+    const res = await invoke<{ pr: string; number: number }>('share_tags_to_site', {
+      savePath: savePath.value,
+      items,
+    });
+    shareResult.value = { ...res, count: items.length };
+    included.value = new Set();
+  } catch (err) {
+    saveError.value = String(err);
+  } finally {
+    sharing.value = false;
+  }
+}
+
+async function exportSelected() {
+  const dir = await open({ directory: true, title: 'Choose Export Folder' });
+  if (!dir) return;
+  sharing.value = true;
+  try {
+    const written = await invoke<string[]>('export_tags', {
+      savePath: savePath.value,
+      tagNames: includedNames.value,
+      outputDir: dir,
+      startgg: null,
+    });
+    shareResult.value = null;
+    folderResult.value = `Exported ${written.length} tag(s).`;
+    included.value = new Set();
+  } catch (err) {
+    saveError.value = String(err);
+  } finally {
+    sharing.value = false;
+  }
 }
 
 // ---- shared database -------------------------------------------------------
@@ -254,31 +320,73 @@ function doneImporting() {
 
       <div v-else key="home" class="view-stack">
         <div class="home-cols">
-          <!-- Your tags -->
+          <!-- Submit your tags -->
           <div class="tag-panel">
             <div class="tag-panel-header">
-              <span class="tag-panel-label">Your Tags</span>
+              <span class="tag-panel-label">Submit your tags</span>
+              <span v-if="includedNames.length" class="home-sel">{{ includedNames.length }}</span>
             </div>
-            <p v-if="!hasSave" class="home-empty">Choose a save file to see your tags.</p>
-            <p v-else-if="!tagNames.length && !loadingSave" class="home-empty">
-              No custom tags yet.
-            </p>
-            <ul v-else class="tag-list">
-              <li v-for="name in tagNames" :key="name" class="home-tag">
-                <div class="home-tag-head">
-                  <span class="tag-name">{{ name }}</span>
-                  <span class="home-tag-actions">
-                    <button class="linkish" @click="emit('share')">Share</button>
-                    <button class="linkish" @click="emit('export')">Export</button>
-                  </span>
-                </div>
-                <TagDiff :save-path="savePath" :tag-name="name" />
-              </li>
-            </ul>
+
+            <div v-if="shareResult" class="home-shared">
+              <p>Submitted {{ shareResult.count }} tag(s).</p>
+              <button class="btn" @click="openUrl(shareResult.pr)">
+                View pull request #{{ shareResult.number }}
+              </button>
+              <button class="linkish" @click="shareResult = null">Submit more</button>
+            </div>
+
+            <template v-else>
+              <p v-if="!hasSave" class="home-empty">Choose a save file to see your tags.</p>
+              <p v-else-if="!tagNames.length && !loadingSave" class="home-empty">
+                No custom tags yet.
+              </p>
+              <ul v-else class="tag-list">
+                <li v-for="name in tagNames" :key="name" class="home-tag">
+                  <div class="home-tag-head" @click="toggleMine(name)">
+                    <span
+                      class="tag-checkbox"
+                      :class="{ 'tag-checkbox--checked': included.has(name) }"
+                      aria-hidden="true"
+                    >
+                      <svg v-if="included.has(name)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                      </svg>
+                    </span>
+                    <span class="tag-name">{{ name }}</span>
+                  </div>
+                  <div class="home-tag-body">
+                    <TagDiff :save-path="savePath" :tag-name="name" />
+                    <StartggLink
+                      v-if="included.has(name)"
+                      :model-value="links[name] ?? null"
+                      @update:model-value="(v: StartggLinkValue | null) => (links[name] = v)"
+                    />
+                  </div>
+                </li>
+              </ul>
+
+              <div v-if="includedNames.length" class="home-submit">
+                <button
+                  class="btn btn-primary"
+                  :disabled="!allLinked || sharing"
+                  @click="submitTags"
+                >
+                  {{ sharing ? 'Uploading…' : `Submit ${includedNames.length}` }}
+                </button>
+                <button class="btn" :disabled="sharing" @click="exportSelected">Export</button>
+                <span v-if="missingLinks" class="home-hint">
+                  {{ missingLinks }} still need a start.gg account
+                </span>
+              </div>
+            </template>
           </div>
 
           <!-- Where new tags come from -->
           <div class="home-sources">
+            <div class="home-sources-head">
+              <span class="tag-panel-label">Install tags to your setup</span>
+            </div>
+
             <div class="source source--primary">
               <div class="source-title">Everyone in a bracket</div>
               <div class="source-sub">Paste a start.gg link.</div>
@@ -413,6 +521,59 @@ function doneImporting() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  cursor: pointer;
+}
+
+.home-tag-body {
+  padding-left: 1.85em;
+}
+
+/* The app draws its own checkbox; a native one is a bright OS control here. */
+.tag-checkbox {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  color: #fff;
+
+  &--checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+}
+
+.home-sel {
+  color: var(--text-muted);
+}
+
+.home-shared {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5em;
+  padding: 0.5em 0.25em 0.75em;
+
+  p { margin: 0; }
+}
+
+.home-submit {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.6em 0.25em 0.4em;
+  border-top: 1px solid var(--line-divider);
+  flex-wrap: wrap;
+}
+
+.home-sources-head {
+  padding-bottom: 0.2em;
+  min-height: 2.5em;
+  display: flex;
+  align-items: center;
 }
 
 .home-tag-actions {
