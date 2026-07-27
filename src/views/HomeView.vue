@@ -51,6 +51,9 @@ const startggHandles = ref<Record<string, string>>({});
 
 const bracketUrl = ref('');
 const bracketBusy = ref(false);
+// Rows the last bracket Find matched — the browser floats only these to the
+// top, so the reorder shows what was found (hand-picking never reorders).
+const bracketPinned = ref<Set<string>>(new Set());
 const bracketStatus = ref('');
 const bracketStatusKind = ref<'' | 'success' | 'warn' | 'error'>('');
 const bracketMisses = ref<{ entrant: string; gamerTag: string; slug: string }[]>([]);
@@ -218,8 +221,17 @@ async function exportSelected() {
 
 function toggle(file: string) {
   const next = new Set(selected.value);
-  if (next.has(file)) next.delete(file);
-  else next.add(file);
+  if (next.has(file)) {
+    next.delete(file);
+    // A found row the user unchecks shouldn't stay floated at the top.
+    if (bracketPinned.value.has(file)) {
+      const pins = new Set(bracketPinned.value);
+      pins.delete(file);
+      bracketPinned.value = pins;
+    }
+  } else {
+    next.add(file);
+  }
   selected.value = next;
 }
 
@@ -246,6 +258,7 @@ async function findBracket() {
     const slugs = new Set(res.entrants.map(e => e.slug));
     const matches = sharedTags.value.filter(t => t.startggSlug && slugs.has(t.startggSlug));
     selected.value = new Set(matches.map(t => t.file));
+    bracketPinned.value = new Set(matches.map(t => t.file));
 
     const tagged = new Set(sharedTags.value.filter(t => t.startggSlug).map(t => t.startggSlug));
     const seen = new Set<string>();
@@ -345,6 +358,7 @@ async function installSelected() {
     startggHandles.value = handles;
     installResult.value = await installFiles(paths, handles);
     selected.value = new Set();
+    bracketPinned.value = new Set();
     await readTags();
   } catch (err) {
     saveError.value = String(err);
@@ -517,6 +531,7 @@ async function chooseFiles() {
             <div class="source source--browser">
               <SharedTagBrowser
                 :selected="selected"
+                :pinned="bracketPinned"
                 :preview-paths="previewPaths"
                 @toggle="toggle"
                 @loaded="sharedTags = $event"
@@ -618,7 +633,7 @@ async function chooseFiles() {
   width: 100%;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
+  gap: 2rem;
   align-items: stretch;
 }
 
@@ -887,6 +902,7 @@ async function chooseFiles() {
 .home-overwrite {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   font-size: 0.75rem;
   color: var(--text-muted);

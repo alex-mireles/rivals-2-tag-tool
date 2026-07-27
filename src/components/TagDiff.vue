@@ -112,6 +112,9 @@ onMounted(() => {
   font-size: 0.9em;
   color: var(--text-muted);
   user-select: none;
+  /* Rows place this after the tag name with the leftover width; the collapsed
+     "changes" affordance sits flush right so every row lines up. */
+  text-align: right;
 
   &:hover {
     color: var(--text-primary);

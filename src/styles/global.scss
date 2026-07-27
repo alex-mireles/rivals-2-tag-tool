@@ -189,7 +189,7 @@ button:focus-visible {
 // The home screen runs two columns side by side; the single-column flows keep
 // the original width.
 .card--wide {
-  width: min(820px, calc(100vw - 2rem));
+  width: min(1000px, calc(100vw - 2rem));
 }
 
 // Opt-out of the height-tracking animation (see AnimatedCard.vue's `static`

@@ -89,7 +89,9 @@ const FIXTURES: Record<string, (args: Record<string, unknown>) => unknown> = {
     entrants: [
       { entrant: 'jugeeya', gamerTag: 'jugeeya', slug: 'user/jugeeya' },
       { entrant: 'Kimchi', gamerTag: 'Kimchi', slug: 'user/kimchi' },
-      { entrant: 'Nobody', gamerTag: 'Nobody', slug: 'user/nobody' },
+      // One entrant with no published tag, so the "N without a tag" misses
+      // disclosure has something to render in browser dev mode.
+      { entrant: 'CalVal', gamerTag: 'CalVal', slug: 'user/calval' },
     ],
   }),
   startgg_search: () => [

@@ -20,6 +20,9 @@ export interface SharedTag {
 const props = defineProps<{
   /** Files currently selected, keyed by manifest file name. */
   selected: Set<string>;
+  /** Rows to float to the top — the bracket-Find results, so what was found
+   *  is visible without scrolling. Plain selection never reorders the list. */
+  pinned?: Set<string>;
   /** Downloaded copies, so a row can show its diff without re-fetching. */
   previewPaths?: Record<string, string>;
 }>();
@@ -45,10 +48,13 @@ const filtered = computed(() => {
           t.startggTag.toLowerCase().includes(q) ||
           t.author.toLowerCase().includes(q),
       );
-  // Selected rows float to the top so you can see what you've picked; a
-  // stable sort keeps everything else in its existing relative order.
+  // Only bracket-Find results float to the top (so what was found is
+  // visible); hand-picked rows stay where they are. A stable sort keeps
+  // everything else in its existing relative order.
+  const pinned = props.pinned;
+  if (!pinned || !pinned.size) return base;
   return [...base].sort(
-    (a, b) => Number(props.selected.has(b.file)) - Number(props.selected.has(a.file)),
+    (a, b) => Number(pinned.has(b.file)) - Number(pinned.has(a.file)),
   );
 });
 
@@ -252,6 +258,7 @@ defineExpose({ reload: load });
 
 .browser-peek {
   flex-shrink: 0;
+  margin-left: auto; /* flush right, matching TagDiff's right-aligned summary */
   padding: 0;
   border: none;
   background: none;
