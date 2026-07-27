@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
+/** The home screen puts two columns side by side and needs more room than the
+ *  single-column flows the 500px card was sized for. */
+defineProps<{ wide?: boolean }>();
+
 const shell = ref<HTMLDivElement | null>(null);
 const content = ref<HTMLDivElement | null>(null);
 
@@ -32,7 +36,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="shell" class="card">
+  <div ref="shell" class="card" :class="{ 'card--wide': wide }">
     <div ref="content" class="card-content">
       <slot />
     </div>

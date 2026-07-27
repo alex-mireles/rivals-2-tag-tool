@@ -47,18 +47,16 @@ async function onToggle(ev: Event) {
 <template>
   <details class="tag-diff" @toggle="onToggle">
     <summary class="tag-diff-summary">
-      What this tag changes
-      <span v-if="diff" class="tag-diff-count">
-        {{ diff.count === 0 ? 'nothing' : `${diff.count} change${diff.count === 1 ? '' : 's'}` }}
-      </span>
+      <template v-if="diff">
+        {{ diff.count === 0 ? 'stock controls' : `${diff.count} change${diff.count === 1 ? '' : 's'}` }}
+      </template>
+      <template v-else>{{ loading ? 'reading…' : 'changes' }}</template>
     </summary>
 
     <div class="tag-diff-body">
       <p v-if="loading" class="tag-diff-note">Reading tag…</p>
       <p v-else-if="errorMsg" class="tag-diff-note tag-diff-note--error">{{ errorMsg }}</p>
-      <p v-else-if="diff && !diff.count" class="tag-diff-note">
-        No differences from the default controls.
-      </p>
+      <p v-else-if="diff && !diff.count" class="tag-diff-note">Same as the default controls.</p>
 
       <template v-else-if="diff">
         <div v-for="group in diff.groups" :key="group.scope" class="tag-diff-group">
@@ -79,51 +77,42 @@ async function onToggle(ev: Event) {
 
 <style scoped lang="scss">
 .tag-diff {
-  margin-top: 0.35rem;
+  margin-top: 0.15em;
 }
 
 .tag-diff-summary {
   cursor: pointer;
-  font-size: 0.8rem;
-  opacity: 0.75;
+  font-size: 0.9em;
+  color: var(--text-muted);
   user-select: none;
 
   &:hover {
-    opacity: 1;
+    color: var(--text-primary);
   }
 }
 
-.tag-diff-count {
-  margin-left: 0.4rem;
-  opacity: 0.7;
-  font-variant-numeric: tabular-nums;
-}
-
 .tag-diff-body {
-  padding: 0.4rem 0 0.2rem 0.9rem;
+  padding: 0.35em 0 0.2em 1em;
 }
 
 .tag-diff-note {
   margin: 0;
-  font-size: 0.8rem;
-  opacity: 0.7;
+  color: var(--text-muted);
 
   &--error {
-    opacity: 1;
-    color: #e06c75;
+    color: var(--text-failure);
   }
 }
 
 .tag-diff-group + .tag-diff-group {
-  margin-top: 0.5rem;
+  margin-top: 0.5em;
 }
 
 .tag-diff-group-title {
-  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.6;
-  margin-bottom: 0.15rem;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 0.15em;
 }
 
 .tag-diff-list {
@@ -136,26 +125,25 @@ async function onToggle(ev: Event) {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  padding: 0.1rem 0;
+  gap: 0.35em;
+  padding: 0.1em 0;
 }
 
 .tag-diff-key {
-  min-width: 9rem;
-  opacity: 0.85;
+  min-width: 8em;
+  color: var(--text-muted);
 }
 
 .tag-diff-from {
-  opacity: 0.55;
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
 .tag-diff-arrow {
-  opacity: 0.5;
+  color: var(--text-muted);
 }
 
 .tag-diff-to {
-  font-weight: 600;
+  color: var(--text-primary);
 }
 </style>

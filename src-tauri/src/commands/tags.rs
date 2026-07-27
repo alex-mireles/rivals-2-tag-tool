@@ -250,6 +250,73 @@ pub async fn get_tag_previews(
 /// This is uesave's own serialization, which is exactly what the tag-sharing
 /// website's WASM build returns — so `src/lib/tagdiff.ts` is a straight port of
 /// the site's `tagdiff.js` and the two can't drift on shape.
+/// One entry per tag in a save, each shaped like a `.r2tag`'s tree so the
+/// frontend can use a single code path. Built once per save file.
+type TagTrees = std::collections::HashMap<String, serde_json::Value>;
+
+/// The save is tens of megabytes and holds every tag, so parsing it again for
+/// each tag the user expands is the difference between instant and a visible
+/// stall. Parse once per (path, mtime) and keep the per-tag trees around;
+/// editing the save changes its mtime, which invalidates this by itself.
+static SAVE_TREES: std::sync::Mutex<Option<(String, std::time::SystemTime, TagTrees)>> =
+    std::sync::Mutex::new(None);
+
+fn tag_trees_for(save_path: &str) -> Result<TagTrees, String> {
+    let mtime = std::fs::metadata(save_path)
+        .and_then(|m| m.modified())
+        .map_err(|e| e.to_string())?;
+
+    if let Ok(guard) = SAVE_TREES.lock() {
+        if let Some((path, cached_mtime, trees)) = guard.as_ref() {
+            if path == save_path && *cached_mtime == mtime {
+                return Ok(trees.clone());
+            }
+        }
+    }
+
+    let file = File::open(save_path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(file);
+    let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+    let save_game_type = serde_json::to_value(&save.root.save_game_type)
+        .map_err(|e| e.to_string())?;
+
+    let names: Vec<String> = match &save.root.properties["SavedPlayerTags"] {
+        Property::Array(ValueVec::Struct(structs)) => structs
+            .iter()
+            .map(|sv| tag_name_of(sv).unwrap_or_default().to_string())
+            .collect(),
+        _ => return Err("SavedPlayerTags is not a struct array".into()),
+    };
+
+    // Serialize the whole array once, then hand each tag its own minimal root —
+    // identical in shape to what `read_tag_json` returns for a .r2tag.
+    let root = serde_json::to_value(&save.root).map_err(|e| e.to_string())?;
+    let array = root
+        .get("properties")
+        .and_then(|p| p.get("SavedPlayerTags_0"))
+        .and_then(|v| v.as_array())
+        .ok_or("SavedPlayerTags_0 missing from serialized save")?;
+
+    let mut trees = TagTrees::new();
+    for (name, value) in names.iter().zip(array.iter()) {
+        if name.is_empty() {
+            continue;
+        }
+        trees.insert(
+            name.clone(),
+            serde_json::json!({
+                "save_game_type": save_game_type,
+                "properties": { "SavedPlayerTags_0": [value] }
+            }),
+        );
+    }
+
+    if let Ok(mut guard) = SAVE_TREES.lock() {
+        *guard = Some((save_path.to_string(), mtime, trees.clone()));
+    }
+    Ok(trees)
+}
+
 /// Same as `read_tag_json`, but for a tag that lives inside the loaded save
 /// rather than a `.r2tag` on disk — so the control diff works for the tags you
 /// already have, not just ones you're about to install.
@@ -259,24 +326,11 @@ pub async fn read_tag_json_from_save(
     tag_name: String,
 ) -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let file = File::open(&save_path).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(file);
-        let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-        // Narrow to the one tag, so the tree looks exactly like a .r2tag's and
-        // the frontend can share one code path.
-        if let Property::Array(ValueVec::Struct(structs)) =
-            &mut save.root.properties["SavedPlayerTags"]
-        {
-            structs.retain(|sv| tag_name_of(sv) == Some(tag_name.as_str()));
-            if structs.is_empty() {
-                return Err(format!("tag '{tag_name}' not found in save"));
-            }
-        } else {
-            return Err("SavedPlayerTags is not a struct array".into());
-        }
-
-        serde_json::to_value(&save.root).map_err(|e| e.to_string())
+        let trees = tag_trees_for(&save_path)?;
+        trees
+            .get(&tag_name)
+            .cloned()
+            .ok_or_else(|| format!("tag '{tag_name}' not found in save"))
     })
     .await
     .map_err(|e| e.to_string())?

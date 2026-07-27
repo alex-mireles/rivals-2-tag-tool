@@ -65,16 +65,9 @@ defineExpose({ reload: load });
 <template>
   <div class="browser">
     <div class="browser-head">
-      <div class="browser-title">
-        Shared database
-        <span v-if="tags.length" class="browser-count">{{ tags.length }} tags</span>
-      </div>
-      <input
-        v-model="query"
-        class="browser-search"
-        type="search"
-        placeholder="Search tag or start.gg name"
-      />
+      <span class="browser-title">Shared database</span>
+      <span v-if="tags.length" class="browser-count">{{ tags.length }}</span>
+      <input v-model="query" class="browser-search" type="search" placeholder="Search" />
     </div>
 
     <p v-if="loading" class="browser-note">Loading published tags…</p>
@@ -100,102 +93,112 @@ defineExpose({ reload: load });
           :path="previewPaths[t.file]"
           class="browser-diff"
         />
-        <button v-else class="browser-peek" @click="emit('preview', t.file)">
-          What this tag changes
-        </button>
+        <button v-else class="browser-peek" @click="emit('preview', t.file)">changes</button>
       </li>
     </ul>
   </div>
 </template>
 
 <style scoped lang="scss">
+.browser {
+  font-size: 1em;
+}
+
 .browser-head {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5em;
+  margin-bottom: 0.4em;
 }
 
 .browser-title {
-  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .browser-count {
-  margin-left: 0.4rem;
-  font-size: 0.8rem;
-  font-weight: 400;
   color: var(--text-muted);
+  opacity: 0.7;
 }
 
+/* Inputs are styled per-view here; without this the browser default renders as
+   a bright white box against the dark card. */
 .browser-search {
   flex: 1;
   min-width: 0;
-}
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  padding: 0.3em 0.5em;
 
-.browser-note {
-  margin: 0.5rem 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
 
-  &--error {
-    color: #e06c75;
+  &:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.6);
+    outline-offset: 1px;
   }
 }
 
-/* A sample of the database is always visible; the rest is a scroll away
-   rather than another screen. */
+.browser-note {
+  margin: 0.4em 0;
+  color: var(--text-muted);
+
+  &--error {
+    color: var(--text-failure);
+  }
+}
+
 .browser-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 15rem;
+  max-height: 12rem;
   overflow-y: auto;
 }
 
 .browser-row {
-  padding: 0.35rem 0;
-  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-
-  &:first-child {
-    border-top: none;
-  }
+  padding: 0.3em 0;
+  border-bottom: 1px solid var(--line-divider);
 }
 
 .browser-main {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.4em;
   cursor: pointer;
 }
 
 .browser-name {
-  font-weight: 500;
+  color: var(--text-primary);
 }
 
 .browser-startgg {
-  font-size: 0.8rem;
   color: var(--text-muted);
 }
 
 .browser-peek {
-  margin-top: 0.15rem;
+  margin-left: 1.35em;
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.9em;
   color: var(--text-muted);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
 
   &:hover {
-    color: var(--text-primary, inherit);
+    color: var(--text-primary);
   }
 }
 
 .browser-diff {
-  margin-left: 1.4rem;
+  margin-left: 1.35em;
 }
 </style>

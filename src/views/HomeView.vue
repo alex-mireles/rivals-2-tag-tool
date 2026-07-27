@@ -1,24 +1,24 @@
 <script setup lang="ts">
 // One screen instead of a menu of destinations.
 //
-// The save is found and read on launch, so the common case needs no clicks at
-// all — the old "choose a file, then press Load" pair collapses into a status
-// line that only asks for input when the file genuinely isn't where it should
-// be. Your tags sit on the left; where new tags come from is spelled out on the
-// right; the shared database is always on screen underneath rather than being
-// somewhere you navigate to.
+// The save is found and read on launch, so the common case needs no clicks —
+// the old choose-a-file + Load pair collapses into a status line that only asks
+// for input when the file genuinely isn't where it should be. Your tags sit on
+// the left; where new tags come from is spelled out on the right, with the
+// database browser living inside its own source tile rather than as a separate
+// section.
 //
-// Export-to-file and import-from-file still exist, but as secondary actions
-// rather than top-level choices: sharing to and installing from the database is
-// what people are here for.
+// Export and import-to-file still exist, but as a per-tag action and the last
+// "or" — sharing to and installing from the database is what people come for.
 
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import type { SaveFileState } from '../types';
+import AnimatedCard from '../components/AnimatedCard.vue';
 import TagDiff from '../components/TagDiff.vue';
 import TagImportPanel from '../components/TagImportPanel.vue';
 import SharedTagBrowser, { type SharedTag } from '../components/SharedTagBrowser.vue';
+import type { SaveFileState } from '../types';
 
 const EXPECTED_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
 
@@ -52,7 +52,6 @@ const folderResult = ref('');
 const hasSave = computed(() => !!savePath.value && !savePathError.value);
 const selectedCount = computed(() => selected.value.size);
 
-// Share/export are separate screens, so they need the save state too.
 watch([savePath, savePathError, tagNames], () => {
   emit('stateChange', {
     savePath: savePath.value,
@@ -78,7 +77,6 @@ async function readTags() {
   }
 }
 
-// The save lives at a known path; look there first and just read it.
 onMounted(async () => {
   try {
     const detected = await invoke<string>('get_default_save_path');
@@ -88,7 +86,7 @@ onMounted(async () => {
       await readTags();
     }
   } catch {
-    /* fall through to the "choose a file" prompt */
+    /* fall through to the choose-a-file prompt */
   }
 });
 
@@ -96,7 +94,7 @@ async function chooseSaveFile() {
   const defaultPath = await invoke<string>('get_default_save_path');
   const filePath = await open({
     multiple: false,
-    title: 'Choose a save file',
+    title: 'Choose a Save File',
     filters: [{ name: '.sav file', extensions: ['sav'] }],
     ...(defaultPath ? { defaultPath } : {}),
   });
@@ -116,11 +114,6 @@ function toggle(file: string) {
   selected.value = next;
 }
 
-function onLoaded(tags: SharedTag[]) {
-  sharedTags.value = tags;
-}
-
-/** Fetch one tag so its diff can be shown without installing it. */
 async function preview(file: string) {
   try {
     const [path] = await invoke<string[]>('download_tags', { files: [file], destDir: null });
@@ -155,7 +148,7 @@ async function findBracket() {
 
     const evName = res.event ? ` for “${res.event}”` : '';
     if (!matches.length) {
-      bracketStatus.value = `No published tags match the ${slugs.size} linked entrant(s)${evName}.`;
+      bracketStatus.value = `No published tags match the ${slugs.size} entrant(s)${evName}.`;
       bracketStatusKind.value = 'warn';
     } else {
       bracketStatus.value = `Selected ${matches.length} tag(s)${evName}.`;
@@ -193,10 +186,9 @@ async function installSelected() {
   }
 }
 
-/** Download the selected tags as files instead of installing them. */
 async function saveToFolder() {
   if (!selected.value.size) return;
-  const dir = await open({ directory: true, title: 'Choose a folder' });
+  const dir = await open({ directory: true, title: 'Choose Download Folder' });
   if (!dir) return;
   busy.value = true;
   try {
@@ -204,7 +196,7 @@ async function saveToFolder() {
       files: [...selected.value],
       destDir: dir,
     });
-    folderResult.value = `Saved ${written.length} tag(s) to ${dir}`;
+    folderResult.value = `Saved ${written.length} tag(s).`;
   } catch (err) {
     saveError.value = String(err);
   } finally {
@@ -215,7 +207,7 @@ async function saveToFolder() {
 async function chooseFiles() {
   const picked = await open({
     multiple: true,
-    title: 'Choose .r2tag files',
+    title: 'Choose .r2tag Files',
     filters: [{ name: '.r2tag file', extensions: ['r2tag'] }],
   });
   if (!picked) return;
@@ -231,320 +223,290 @@ function doneImporting() {
 </script>
 
 <template>
-  <div class="home">
-    <!-- Save file: a quiet status line once it's found, a prompt when it isn't. -->
-    <div class="save-bar" :class="{ 'save-bar--needs-input': !hasSave }">
-      <template v-if="hasSave">
-        <span class="save-dot" aria-hidden="true"></span>
-        <span class="save-name">{{ savePath.split(/[\\/]/).pop() }}</span>
-        <span class="save-meta">
-          {{ loadingSave ? 'reading…' : `${tagNames.length} tag${tagNames.length === 1 ? '' : 's'}` }}
+  <AnimatedCard wide>
+    <div class="home-head">
+      <span class="home-title">Rivals II Tag Tool</span>
+      <span v-if="hasSave" class="home-save">
+        <span class="home-dot" aria-hidden="true"></span>
+        <span class="home-save-name">{{ savePath.split(/[\\/]/).pop() }}</span>
+        <span class="home-save-count">
+          {{ loadingSave ? 'reading…' : `${tagNames.length} tags` }}
         </span>
         <button class="linkish" @click="chooseSaveFile">Change</button>
-      </template>
-      <template v-else>
-        <span class="save-name">{{ EXPECTED_SAVE_FILE_NAME }} not found</span>
-        <button class="btn btn-primary btn-sm" @click="chooseSaveFile">Choose a save file</button>
-      </template>
-    </div>
-    <p v-if="saveError" class="error-line">{{ saveError }}</p>
-
-    <!-- Installing takes over: it's a decision point, not a background task. -->
-    <div v-if="importPaths.length" class="panel">
-      <TagImportPanel
-        :save-path="savePath"
-        :existing-tag-names="tagNames"
-        :paths="importPaths"
-        :startgg-handles="startggHandles"
-        @restart="doneImporting"
-      />
-      <button class="linkish back" @click="doneImporting">← Back</button>
+      </span>
+      <button v-else class="btn btn-primary" @click="chooseSaveFile">Choose a Save File</button>
     </div>
 
-    <template v-else>
-      <div class="columns">
-        <!-- Your tags -->
-        <section class="panel">
-          <h2 class="panel-title">Your tags</h2>
-          <p class="panel-sub">In your save file</p>
+    <p v-if="saveError" class="error-msg">{{ saveError }}</p>
 
-          <p v-if="!hasSave" class="empty">Choose a save file to see your tags.</p>
-          <p v-else-if="!tagNames.length && !loadingSave" class="empty">
-            No custom tags in this save yet.
-          </p>
-          <ul v-else class="rows">
-            <li v-for="name in tagNames" :key="name" class="row">
-              <div class="row-main">
-                <span class="row-name">{{ name }}</span>
-                <span class="row-actions">
-                  <button class="linkish" @click="emit('share')">Share</button>
-                  <button class="linkish" @click="emit('export')">Export</button>
-                </span>
-              </div>
-              <TagDiff :save-path="savePath" :tag-name="name" />
-            </li>
-          </ul>
-        </section>
-
-        <!-- Where new tags come from -->
-        <section class="panel">
-          <h2 class="panel-title">Get tags</h2>
-          <p class="panel-sub">Pick a source</p>
-
-          <div class="source source--primary">
-            <div class="source-title">Everyone in a bracket</div>
-            <div class="source-sub">Paste a start.gg link and we'll pick out who has a tag.</div>
-            <div class="source-row">
-              <input
-                v-model="bracketUrl"
-                type="text"
-                placeholder="start.gg/tournament/…/event/…"
-                @keydown.enter="findBracket"
-              />
-              <button class="btn btn-sm" :disabled="bracketBusy || !bracketUrl.trim()" @click="findBracket">
-                {{ bracketBusy ? 'Looking…' : 'Find' }}
-              </button>
-            </div>
-            <p v-if="bracketStatus" class="source-status" :class="`source-status--${bracketStatusKind}`">
-              {{ bracketStatus }}
-            </p>
-            <details v-if="bracketMisses.length" class="misses">
-              <summary>
-                {{ bracketMisses.length }} entrant{{ bracketMisses.length === 1 ? '' : 's' }}
-                without a published tag
-              </summary>
-              <p>{{ bracketMisses.map(e => e.gamerTag || e.entrant || e.slug).join(', ') }}</p>
-            </details>
-          </div>
-
-          <div class="or">or</div>
-
-          <div class="source">
-            <div class="source-title">Pick from the database</div>
-            <div class="source-sub">Browse everything published, below.</div>
-          </div>
-
-          <div class="or">or</div>
-
-          <div class="source">
-            <div class="source-title">From files on this PC</div>
-            <div class="source-sub">.r2tag files someone sent you.</div>
-            <button class="btn btn-sm" @click="chooseFiles">Choose files</button>
-          </div>
-        </section>
+    <Transition name="content-swap" mode="out-in">
+      <!-- Installing takes over the card: it's a decision point. -->
+      <div v-if="importPaths.length" key="import" class="view-stack">
+        <TagImportPanel
+          :save-path="savePath"
+          :existing-tag-names="tagNames"
+          :paths="importPaths"
+          :startgg-handles="startggHandles"
+          @restart="doneImporting"
+        />
+        <button class="linkish" @click="doneImporting">← Back</button>
       </div>
 
-      <!-- The database itself, always on screen. -->
-      <section class="panel">
-        <SharedTagBrowser
-          :selected="selected"
-          :preview-paths="previewPaths"
-          @toggle="toggle"
-          @loaded="onLoaded"
-          @preview="preview"
-        />
-        <div class="install-bar">
+      <div v-else key="home" class="view-stack">
+        <div class="home-cols">
+          <!-- Your tags -->
+          <div class="tag-panel">
+            <div class="tag-panel-header">
+              <span class="tag-panel-label">Your Tags</span>
+            </div>
+            <p v-if="!hasSave" class="home-empty">Choose a save file to see your tags.</p>
+            <p v-else-if="!tagNames.length && !loadingSave" class="home-empty">
+              No custom tags yet.
+            </p>
+            <ul v-else class="tag-list">
+              <li v-for="name in tagNames" :key="name" class="home-tag">
+                <div class="home-tag-head">
+                  <span class="tag-name">{{ name }}</span>
+                  <span class="home-tag-actions">
+                    <button class="linkish" @click="emit('share')">Share</button>
+                    <button class="linkish" @click="emit('export')">Export</button>
+                  </span>
+                </div>
+                <TagDiff :save-path="savePath" :tag-name="name" />
+              </li>
+            </ul>
+          </div>
+
+          <!-- Where new tags come from -->
+          <div class="home-sources">
+            <div class="source source--primary">
+              <div class="source-title">Everyone in a bracket</div>
+              <div class="source-sub">Paste a start.gg link.</div>
+              <div class="source-row">
+                <input
+                  v-model="bracketUrl"
+                  class="home-input"
+                  type="text"
+                  placeholder="start.gg/tournament/…"
+                  @keydown.enter="findBracket"
+                />
+                <button class="btn" :disabled="bracketBusy || !bracketUrl.trim()" @click="findBracket">
+                  {{ bracketBusy ? '…' : 'Find' }}
+                </button>
+              </div>
+              <p v-if="bracketStatus" class="source-status" :class="`source-status--${bracketStatusKind}`">
+                {{ bracketStatus }}
+              </p>
+              <details v-if="bracketMisses.length" class="home-misses">
+                <summary>{{ bracketMisses.length }} without a tag</summary>
+                <p>{{ bracketMisses.map(e => e.gamerTag || e.entrant || e.slug).join(', ') }}</p>
+              </details>
+            </div>
+
+            <div class="home-or">or</div>
+
+            <!-- The database lives in its own source tile, not a separate section. -->
+            <div class="source source--browser">
+              <SharedTagBrowser
+                :selected="selected"
+                :preview-paths="previewPaths"
+                @toggle="toggle"
+                @loaded="sharedTags = $event"
+                @preview="preview"
+              />
+            </div>
+
+            <div class="home-or">or</div>
+
+            <div class="source">
+              <div class="source-title">From files on this PC</div>
+              <div class="source-sub">.r2tag files someone sent you.</div>
+              <button class="btn" @click="chooseFiles">Choose Files</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="home-actions">
           <button
             class="btn btn-primary"
             :disabled="!selectedCount || !hasSave || busy"
             @click="installSelected"
           >
-            {{ busy ? 'Downloading…' : `Install ${selectedCount || ''} to save`.trim() }}
+            {{ busy ? 'Downloading…' : `Install ${selectedCount || ''}`.trim() }}
           </button>
-          <button class="btn btn-sm" :disabled="!selectedCount || busy" @click="saveToFolder">
-            Save to folder
+          <button class="btn" :disabled="!selectedCount || busy" @click="saveToFolder">
+            Save to Folder
           </button>
-          <span v-if="selectedCount && !hasSave" class="hint">Choose a save file first.</span>
-          <span v-else-if="folderResult" class="hint">{{ folderResult }}</span>
+          <span v-if="selectedCount && !hasSave" class="home-hint">Choose a save file first.</span>
+          <span v-else-if="folderResult" class="home-hint">{{ folderResult }}</span>
         </div>
-      </section>
-    </template>
-  </div>
+      </div>
+    </Transition>
+  </AnimatedCard>
 </template>
 
 <style scoped lang="scss">
-.home {
+.home-head {
+  width: 100%;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
-  padding: 0.5rem 0 1rem;
+  min-height: 2rem;
 }
 
-.save-bar {
+.home-title {
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+.home-save {
+  margin-left: auto;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 0.75rem;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  border-radius: 8px;
-  font-size: 0.85rem;
-
-  &--needs-input {
-    border-color: var(--text-muted);
-  }
+  font-size: 0.75rem;
 }
 
-.save-dot {
-  width: 7px;
-  height: 7px;
+.home-dot {
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #7fd39a;
+  background: var(--text-success);
 }
 
-.save-name {
+.home-save-name {
   font-family: 'Ubuntu Sans Mono Variable', monospace;
-}
-
-.save-meta {
   color: var(--text-muted);
 }
 
-.save-bar .linkish,
-.install-bar .hint {
-  margin-left: auto;
+.home-save-count {
+  color: var(--text-muted);
 }
 
-.error-line {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #e06c75;
-}
-
-.columns {
+.home-cols {
+  width: 100%;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
   align-items: start;
 }
 
-.panel {
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  border-radius: 10px;
-  padding: 0.75rem 0.9rem;
-}
-
-.panel-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 500;
-}
-
-.panel-sub {
-  margin: 0 0 0.6rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.empty {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.rows {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  max-height: 18rem;
-  overflow-y: auto;
-}
-
-.row {
-  padding: 0.35rem 0;
-  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
-
-  &:first-child {
-    border-top: none;
-  }
-}
-
-.row-main {
+.home-sources {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.home-empty {
+  margin: 0;
+  padding: 0.6em 0.25em;
+  font-size: 1em;
+  color: var(--text-muted);
+}
+
+.home-tag {
+  padding: 0.4em 0.25em;
+  border-bottom: 1px solid var(--line-divider);
+}
+
+.home-tag-head {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
 }
 
-.row-name {
-  font-weight: 500;
-}
-
-.row-actions {
+.home-tag-actions {
   margin-left: auto;
   display: flex;
   gap: 0.5rem;
 }
 
-/* The bracket path is what a TO reaches for, so it gets the emphasis; the
-   others stay available but visibly secondary. */
 .source {
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
-  border-radius: 8px;
-  padding: 0.55rem 0.7rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface-inset);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-panel);
+  font-size: 0.75rem;
 
   &--primary {
-    border-color: var(--text-accent, #6ea8fe);
+    border-color: var(--accent);
+  }
+
+  &--browser {
+    padding: 0.5rem 0.6rem;
   }
 }
 
 .source-title {
-  font-size: 0.88rem;
+  font-size: 1em;
 }
 
 .source-sub {
-  font-size: 0.78rem;
   color: var(--text-muted);
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.4em;
 }
 
 .source-row {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
+  align-items: center;
+}
 
-  input {
-    flex: 1;
-    min-width: 0;
+/* Inputs are styled per-view in this app; match the inset panels rather than
+   inheriting the browser default (which rendered as a white box). */
+.home-input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 1em;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-button);
+  padding: 0.4em 0.6em;
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  &:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.6);
+    outline-offset: 1px;
   }
 }
 
 .source-status {
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
+  margin: 0.4em 0 0;
 
-  &--success { color: #7fd39a; }
-  &--warn { color: #e5c07b; }
-  &--error { color: #e06c75; }
+  &--success { color: var(--text-success); }
+  &--warn { color: var(--text-warning); }
+  &--error { color: var(--text-failure); }
 }
 
-.misses {
-  margin-top: 0.3rem;
-  font-size: 0.78rem;
+.home-misses {
+  margin-top: 0.3em;
   color: var(--text-muted);
 
   summary { cursor: pointer; }
-  p { margin: 0.25rem 0 0; }
+  p { margin: 0.25em 0 0; }
 }
 
-.or {
+.home-or {
   text-align: center;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
-  margin: 0.3rem 0;
 }
 
-.install-bar {
+.home-actions {
+  width: 100%;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.6rem;
+  gap: 0.5rem;
 }
 
-.hint {
-  font-size: 0.8rem;
+.home-hint {
+  font-size: 0.75rem;
   color: var(--text-muted);
-}
-
-.back {
-  margin-top: 0.5rem;
 }
 
 .linkish {
@@ -552,16 +514,12 @@ function doneImporting() {
   border: none;
   background: none;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
 
-  &:hover { color: var(--text-primary, inherit); }
-}
-
-@media (max-width: 720px) {
-  .columns { grid-template-columns: 1fr; }
+  &:hover { color: var(--text-primary); }
 }
 </style>

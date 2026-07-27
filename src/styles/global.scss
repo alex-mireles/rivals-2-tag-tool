@@ -128,7 +128,18 @@ button:focus-visible {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  // Tall content (the home screen with both columns filled) has to stay
+  // reachable rather than being clipped at the window edge.
+  overflow-y: auto;
+  padding: 2.5rem 1rem 1.5rem;
+}
+
+// Once the card is taller than the window, centring would push its head off the
+// top; start at the top instead so scrolling reaches everything.
+@media (max-height: 820px) {
+  .viewport {
+    align-items: flex-start;
+  }
 }
 
 // Shell rendered by AnimatedCard.vue; its inline height tracks .card-content.
@@ -140,6 +151,12 @@ button:focus-visible {
   border-radius: var(--radius-card);
   color: var(--text-primary);
   transition: height 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+// The home screen runs two columns side by side; the single-column flows keep
+// the original width.
+.card--wide {
+  width: min(820px, calc(100vw - 2rem));
 }
 
 .card-content {
