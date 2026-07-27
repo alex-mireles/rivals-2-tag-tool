@@ -149,6 +149,18 @@ const allLinked = computed(
 );
 const missingLinks = computed(() => includedNames.value.filter(n => !links[n]?.slug).length);
 
+/** The Submit button carries its own status instead of a separate hint line
+ *  below it — a hint line here would sit under only this column's buttons and
+ *  throw off the horizontal alignment with the right column's buttons, which
+ *  have no equivalent line. */
+const submitLabel = computed(() => {
+  if (sharing.value) return 'Uploading…';
+  if (!includedNames.value.length) return 'Submit';
+  return missingLinks.value
+    ? `Submit ${includedNames.value.length} · needs start.gg`
+    : `Submit ${includedNames.value.length}`;
+});
+
 function toggleMine(name: string) {
   const next = new Set(included.value);
   if (next.has(name)) next.delete(name);
@@ -422,27 +434,31 @@ async function chooseFiles() {
 
             <template v-else>
               <p v-if="!hasSave" class="home-empty">Choose a save file to see your tags.</p>
-              <p v-else-if="!tagNames.length && !loadingSave" class="home-empty">
+              <div v-else-if="loadingSave" class="home-spinner-wrap" role="status" aria-label="Loading tags">
+                <span class="home-spinner" aria-hidden="true"></span>
+              </div>
+              <p v-else-if="!tagNames.length" class="home-empty">
                 No custom tags yet.
               </p>
               <ul v-else class="tag-list">
                 <li v-for="name in tagNames" :key="name" class="home-tag">
-                  <div class="home-tag-head" @click="toggleMine(name)">
-                    <span
-                      class="tag-checkbox"
-                      :class="{ 'tag-checkbox--checked': included.has(name) }"
-                      aria-hidden="true"
-                    >
-                      <svg v-if="included.has(name)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
-                        <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                      </svg>
-                    </span>
-                    <span class="tag-name">{{ name }}</span>
+                  <div class="home-tag-row">
+                    <div class="home-tag-head" @click="toggleMine(name)">
+                      <span
+                        class="tag-checkbox"
+                        :class="{ 'tag-checkbox--checked': included.has(name) }"
+                        aria-hidden="true"
+                      >
+                        <svg v-if="included.has(name)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+                          <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                        </svg>
+                      </span>
+                      <span class="tag-name">{{ name }}</span>
+                    </div>
+                    <TagDiff :save-path="savePath" :tag-name="name" class="home-tag-diff" />
                   </div>
-                  <div class="home-tag-body">
-                    <TagDiff :save-path="savePath" :tag-name="name" />
+                  <div v-if="included.has(name)" class="home-tag-link">
                     <StartggLink
-                      v-if="included.has(name)"
                       :model-value="links[name] ?? null"
                       @update:model-value="(v: StartggLinkValue | null) => (links[name] = v)"
                     />
@@ -458,14 +474,11 @@ async function chooseFiles() {
               :disabled="!includedNames.length || !allLinked || sharing"
               @click="submitTags"
             >
-              {{ sharing ? 'Uploading…' : `Submit ${includedNames.length || ''}`.trim() }}
+              {{ submitLabel }}
             </button>
             <button class="btn" :disabled="!includedNames.length || sharing" @click="exportSelected">
               Export to File
             </button>
-            <span v-if="missingLinks" class="home-hint">
-              {{ missingLinks }} still need a start.gg account
-            </span>
           </div>
         </div>
 
@@ -640,6 +653,17 @@ async function chooseFiles() {
   border-bottom: 1px solid var(--line-divider);
 }
 
+/* The name row and its "changes" expander sit side by side so the expander no
+   longer costs its own line. align-items: flex-start keeps the name pinned to
+   the top when TagDiff expands, instead of drifting to the vertical centre of
+   the now-taller row. TagDiff is a flex sibling of .home-tag-head (not nested
+   inside it) so its clicks don't bubble into the row's own toggle handler. */
+.home-tag-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .home-tag-head {
   display: flex;
   align-items: center;
@@ -647,8 +671,14 @@ async function chooseFiles() {
   cursor: pointer;
 }
 
-.home-tag-body {
+.home-tag-diff {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.home-tag-link {
   padding-left: 1.85em;
+  margin-top: 0.3em;
 }
 
 /* The app draws its own checkbox; a native one is a bright OS control here. */
@@ -685,8 +715,44 @@ async function chooseFiles() {
   overflow-y: auto;
 }
 
+/* A pill rather than a bare digit flush against the heading text (which
+   used to read as "Submit your tags3"). */
 .home-sel {
+  margin-left: 0.5rem;
+  padding: 0.1em 0.55em;
+  background: var(--surface-hover);
+  border-radius: var(--radius-button);
   color: var(--text-muted);
+  font-size: 0.8em;
+  font-weight: 600;
+}
+
+/* Fills the tag panel while the save's tags are being read, instead of an
+   empty <ul> — keeps the column's height steady rather than collapsing. */
+.home-spinner-wrap {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-mine .home-spinner-wrap {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+}
+
+.home-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 4px solid var(--line);
+  border-top-color: var(--accent);
+  animation: home-spin 0.85s linear infinite;
+}
+
+@keyframes home-spin {
+  to { transform: rotate(360deg); }
 }
 
 .home-shared {

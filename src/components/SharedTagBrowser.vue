@@ -91,34 +91,36 @@ defineExpose({ reload: load });
 
     <ul v-else class="browser-list">
       <li v-for="t in filtered" :key="t.file" class="browser-row">
-        <div class="browser-main" @click="emit('toggle', t.file)">
-          <span
-            class="tag-checkbox"
-            :class="{ 'tag-checkbox--checked': selected.has(t.file) }"
-            aria-hidden="true"
-          >
-            <svg v-if="selected.has(t.file)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-            </svg>
-          </span>
-          <span class="tag-name browser-name">{{ t.name }}</span>
-          <button
-            v-if="t.startggTag"
-            class="browser-startgg"
-            title="Open on start.gg"
-            @click.stop="openProfile(t.startggSlug)"
-          >@{{ t.startggTag }}</button>
+        <div class="browser-line">
+          <div class="browser-main" @click="emit('toggle', t.file)">
+            <span
+              class="tag-checkbox"
+              :class="{ 'tag-checkbox--checked': selected.has(t.file) }"
+              aria-hidden="true"
+            >
+              <svg v-if="selected.has(t.file)" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+              </svg>
+            </span>
+            <span class="tag-name browser-name">{{ t.name }}</span>
+            <button
+              v-if="t.startggTag"
+              class="browser-startgg"
+              title="Open on start.gg"
+              @click.stop="openProfile(t.startggSlug)"
+            >@{{ t.startggTag }}</button>
+          </div>
+          <TagDiff
+            v-if="previewPaths && previewPaths[t.file]"
+            :path="previewPaths[t.file]"
+            :default-open="true"
+            :hide-count="true"
+            class="browser-diff"
+          />
+          <button v-else class="browser-peek" @click="emit('preview', t.file)">
+            <span class="browser-peek-arrow" aria-hidden="true">▸</span> changes
+          </button>
         </div>
-        <TagDiff
-          v-if="previewPaths && previewPaths[t.file]"
-          :path="previewPaths[t.file]"
-          :default-open="true"
-          :hide-count="true"
-          class="browser-diff"
-        />
-        <button v-else class="browser-peek" @click="emit('preview', t.file)">
-          <span class="browser-peek-arrow" aria-hidden="true">▸</span> changes
-        </button>
       </li>
     </ul>
   </div>
@@ -193,6 +195,17 @@ defineExpose({ reload: load });
   border-bottom: 1px solid var(--line-divider);
 }
 
+/* Name row and its "changes" expander share one line: align-items: flex-start
+   keeps the name pinned to the top instead of drifting to the vertical
+   centre once TagDiff expands. TagDiff/the peek button sit beside
+   .browser-main rather than nested in it, so their clicks don't bubble into
+   the row's own toggle handler. */
+.browser-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+}
+
 .browser-main {
   display: flex;
   align-items: center;
@@ -238,7 +251,7 @@ defineExpose({ reload: load });
 }
 
 .browser-peek {
-  margin-left: 1.35em;
+  flex-shrink: 0;
   padding: 0;
   border: none;
   background: none;
@@ -253,6 +266,7 @@ defineExpose({ reload: load });
 }
 
 .browser-diff {
-  margin-left: 1.35em;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 </style>

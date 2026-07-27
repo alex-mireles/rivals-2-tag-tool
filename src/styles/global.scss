@@ -255,8 +255,14 @@ button:focus-visible {
     }
   }
 
+  /* An opacity-only disabled state faded the label into the dark background
+     until it was unreadable. Give disabled buttons an explicit muted fill
+     instead — legible text, still obviously inactive — rather than just
+     dimming whatever background (accent or none) the button already had. */
   &:disabled {
-    opacity: 0.4;
+    opacity: 1;
+    background: var(--surface-inset);
+    color: var(--text-muted);
     cursor: not-allowed;
     transform: none;
   }
