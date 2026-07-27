@@ -425,7 +425,7 @@ async function chooseFiles() {
               <p v-else-if="!tagNames.length && !loadingSave" class="home-empty">
                 No custom tags yet.
               </p>
-              <ul v-else class="tag-list" :class="{ 'tag-list--open': includedNames.length > 0 }">
+              <ul v-else class="tag-list">
                 <li v-for="name in tagNames" :key="name" class="home-tag">
                   <div class="home-tag-head" @click="toggleMine(name)">
                     <span
@@ -449,21 +449,23 @@ async function chooseFiles() {
                   </div>
                 </li>
               </ul>
-
-              <div v-if="includedNames.length" class="home-submit">
-                <button
-                  class="btn btn-primary"
-                  :disabled="!allLinked || sharing"
-                  @click="submitTags"
-                >
-                  {{ sharing ? 'Uploading…' : `Submit ${includedNames.length}` }}
-                </button>
-                <button class="btn" :disabled="sharing" @click="exportSelected">Export</button>
-                <span v-if="missingLinks" class="home-hint">
-                  {{ missingLinks }} still need a start.gg account
-                </span>
-              </div>
             </template>
+          </div>
+
+          <div class="home-submit">
+            <button
+              class="btn btn-primary"
+              :disabled="!includedNames.length || !allLinked || sharing"
+              @click="submitTags"
+            >
+              {{ sharing ? 'Uploading…' : `Submit ${includedNames.length || ''}`.trim() }}
+            </button>
+            <button class="btn" :disabled="!includedNames.length || sharing" @click="exportSelected">
+              Export to File
+            </button>
+            <span v-if="missingLinks" class="home-hint">
+              {{ missingLinks }} still need a start.gg account
+            </span>
           </div>
         </div>
 
@@ -519,35 +521,35 @@ async function chooseFiles() {
               </button>
               <p v-if="fileInstallResult" class="source-status">{{ fileInstallResult }}</p>
             </div>
-          </div>
-        </div>
 
-        <div class="home-actions">
-          <button
-            class="btn btn-primary"
-            :disabled="!selectedCount || !hasSave || busy"
-            @click="installSelected"
-          >
-            {{ busy ? 'Installing…' : `Install ${selectedCount || ''}`.trim() }}
-          </button>
-          <button class="btn" :disabled="!selectedCount || busy" @click="saveToFolder">
-            Save to Folder
-          </button>
-          <div class="home-overwrite" @click="overwriteExisting = !overwriteExisting">
-            <span
-              class="tag-checkbox"
-              :class="{ 'tag-checkbox--checked': overwriteExisting }"
-              aria-hidden="true"
-            >
-              <svg v-if="overwriteExisting" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-              </svg>
-            </span>
-            <span>Overwrite existing tags</span>
+            <div class="home-install">
+              <div class="home-overwrite" @click="overwriteExisting = !overwriteExisting">
+                <span
+                  class="tag-checkbox"
+                  :class="{ 'tag-checkbox--checked': overwriteExisting }"
+                  aria-hidden="true"
+                >
+                  <svg v-if="overwriteExisting" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                </span>
+                <span>Overwrite existing tags</span>
+              </div>
+              <button
+                class="btn btn-primary"
+                :disabled="!selectedCount || !hasSave || busy"
+                @click="installSelected"
+              >
+                {{ busy ? 'Installing…' : `Install ${selectedCount || ''}`.trim() }}
+              </button>
+              <button class="btn" :disabled="!selectedCount || busy" @click="saveToFolder">
+                Save to Folder
+              </button>
+              <span v-if="selectedCount && !hasSave" class="home-hint">Choose a save file first.</span>
+              <span v-else-if="installResult" class="home-hint">{{ installResult }}</span>
+              <span v-else-if="folderResult" class="home-hint">{{ folderResult }}</span>
+            </div>
           </div>
-          <span v-if="selectedCount && !hasSave" class="home-hint">Choose a save file first.</span>
-          <span v-else-if="installResult" class="home-hint">{{ installResult }}</span>
-          <span v-else-if="folderResult" class="home-hint">{{ folderResult }}</span>
         </div>
       </div>
   </AnimatedCard>
@@ -564,8 +566,11 @@ async function chooseFiles() {
 }
 
 .home-title {
-  font-size: 1.05rem;
+  font-size: 1.5rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .home-save {
@@ -601,7 +606,7 @@ async function chooseFiles() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.75rem;
-  align-items: start;
+  align-items: stretch;
 }
 
 .home-sources,
@@ -609,6 +614,18 @@ async function chooseFiles() {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+/* The left column must always match the right column's height instead of
+   growing when a tag is selected — the tag list scrolls internally instead.
+   Only safe because AnimatedCard is `static` here (no JS-pinned height). */
+.home-mine {
+  min-height: 0;
+
+  .tag-panel {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 .home-empty {
@@ -652,12 +669,19 @@ async function chooseFiles() {
   }
 }
 
-/* With a tag selected, the start.gg linker and its results dropdown live
-   inside this list. Letting it grow unbounded pushed the whole card past the
-   window; cap it instead, generous enough to roughly match the height of the
-   shared-database tile on the right. */
-.tag-list--open {
-  max-height: 30rem;
+/* Global .tag-list caps at max-height: 14rem and scrolls; here it must instead
+   fill whatever height .home-mine .tag-panel has (which stretches to match
+   the right column) and never change size when a tag is selected. Scoped to
+   .home-mine so the global default stays untouched for other consumers.
+   height: 0 (with flex-basis 0 via `1 1 0`) is required, not just min-height: 0 —
+   a flex item's natural (max-content) height still contributes to the grid
+   row's size otherwise, so selecting a tag grew both columns 605px -> 630px.
+   Forcing the basis/height to 0 means only the flex-grow'd size is used. */
+.home-mine .tag-list {
+  flex: 1 1 0;
+  height: 0;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
 }
 
@@ -675,18 +699,23 @@ async function chooseFiles() {
   p { margin: 0; }
 }
 
+/* Always-visible action column under the tag panel: Submit + Export to File,
+   stacked full-width so both buttons match the global .btn sizing exactly. */
 .home-submit {
   display: flex;
-  align-items: center;
-  gap: 0.5em;
-  padding: 0.6em 0.25em 0.4em;
-  border-top: 1px solid var(--line-divider);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 0.5rem;
+}
 
-  .btn {
-    flex: 1 1 0;
-    width: auto;
-  }
+/* Global .btn uses `padding: 0.7em`, and .btn-primary sets `font-size: 0.9em`.
+   Because the padding is in em, .btn-primary buttons (Submit, Install) end up
+   taller than plain .btn buttons (Export to File, Save to Folder) which inherit
+   the smaller ambient font-size — 37px vs 35px measured live. Forcing the same
+   font-size on every button in these action columns makes the em-based padding
+   resolve identically, so all four buttons are exactly the same height. */
+.home-submit .btn,
+.home-install .btn {
+  font-size: 0.9em;
 }
 
 .home-sources-head {
@@ -780,21 +809,16 @@ async function chooseFiles() {
   color: var(--text-muted);
 }
 
-.home-actions {
+/* Always-visible action column in the right panel: the overwrite checkbox
+   followed by Install + Save to Folder, stacked full-width to match .home-submit. */
+.home-install {
   width: 100%;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.5rem;
-  flex-wrap: wrap;
-
-  .btn {
-    flex: 1 1 0;
-    width: auto;
-  }
 }
 
 .home-overwrite {
-  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 0.4rem;
