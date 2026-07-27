@@ -18,11 +18,23 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import AnimatedCard from '../components/AnimatedCard.vue';
 import StartggLink from '../components/StartggLink.vue';
 import TagDiff from '../components/TagDiff.vue';
-import TagImportPanel from '../components/TagImportPanel.vue';
 import SharedTagBrowser, { type SharedTag } from '../components/SharedTagBrowser.vue';
 import type { SaveFileState, StartggLinkValue } from '../types';
 
 const EXPECTED_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
+
+interface TagPreviewInfo {
+  path: string;
+  tag_name: string;
+  version: number | null;
+  compatible: boolean;
+}
+
+interface ImportOutcome {
+  imported: string[];
+  skipped: string[];
+  incompatible: string[];
+}
 
 const emit = defineEmits<{ stateChange: [state: SaveFileState] }>();
 
@@ -50,12 +62,31 @@ const links = reactive<Record<string, StartggLinkValue | null>>({});
 const sharing = ref(false);
 const shareResult = ref<{ pr: string; number: number; count: number } | null>(null);
 
-const importPaths = ref<string[]>([]);
 const busy = ref(false);
 const folderResult = ref('');
+const installResult = ref('');
+const fileInstallResult = ref('');
+// Installing overwrites same-named tags already in the save by default; the
+// checkbox next to Install lets you opt out.
+const overwriteExisting = ref(true);
 
 const hasSave = computed(() => !!savePath.value && !savePathError.value);
 const selectedCount = computed(() => selected.value.size);
+
+/** Abbreviate a long absolute path to its first three segments (drive, "Users",
+ *  username), an ellipsis, then the file name — keeps the user-identifying
+ *  part visible without spelling out every folder in between. Paths that are
+ *  already short (4 segments or fewer) are shown in full. */
+function abbreviatePath(path: string): string {
+  const sep = path.includes('\\') ? '\\' : '/';
+  const parts = path.split(/[\\/]/).filter(Boolean);
+  if (parts.length <= 4) return path;
+  const head = parts.slice(0, 3).join(sep);
+  const fileName = parts[parts.length - 1];
+  return `${head}${sep}...${sep}${fileName}`;
+}
+
+const abbreviatedSavePath = computed(() => abbreviatePath(savePath.value));
 
 watch([savePath, savePathError, tagNames], () => {
   emit('stateChange', {
@@ -230,9 +261,65 @@ async function findBracket() {
 
 // ---- installing ------------------------------------------------------------
 
+/**
+ * Preview + import a batch of .r2tag files into the loaded save, in place —
+ * no full-screen takeover. Only version-compatible tags are sent to
+ * import_tags; the rest are reported as incompatible.
+ *
+ * `handles` is an optional file-path -> start.gg handle map. Two different
+ * people can end up with the same in-game tag name by coincidence; a save
+ * holds one tag per name, so without help the second import would collide
+ * with the first. Where we know a start.gg handle for a colliding tag, it's
+ * installed under that handle instead so both land — the same collision
+ * safety TagImportPanel used to provide.
+ */
+async function installFiles(paths: string[], handles: Record<string, string>): Promise<string> {
+  const previewRes = await invoke<{ save_version: number | null; previews: TagPreviewInfo[] }>(
+    'get_tag_previews',
+    { r2tagPaths: paths, savePath: savePath.value },
+  );
+  const compatible = previewRes.previews.filter(p => p.compatible);
+  const incompatibleFromPreview = previewRes.previews.length - compatible.length;
+
+  const byName = new Map<string, TagPreviewInfo[]>();
+  for (const p of compatible) {
+    if (!byName.has(p.tag_name)) byName.set(p.tag_name, []);
+    byName.get(p.tag_name)!.push(p);
+  }
+  const renames: Record<string, string> = {};
+  for (const group of byName.values()) {
+    if (group.length < 2) continue;
+    for (const p of group) {
+      const handle = handles[p.path];
+      if (handle && handle !== p.tag_name) renames[p.path] = handle;
+    }
+  }
+
+  const instructions = compatible.map(p => ({
+    path: p.path,
+    tag_name: p.tag_name,
+    overwrite: overwriteExisting.value,
+    rename: renames[p.path] ?? null,
+  }));
+
+  const result = await invoke<ImportOutcome>('import_tags', {
+    savePath: savePath.value,
+    instructions,
+  });
+
+  const totalIncompatible = result.incompatible.length + incompatibleFromPreview;
+  const parts: string[] = [];
+  if (result.imported.length) parts.push(`Installed ${result.imported.length}`);
+  if (result.skipped.length) parts.push(`skipped ${result.skipped.length}`);
+  if (totalIncompatible) parts.push(`${totalIncompatible} incompatible`);
+  return parts.length ? parts.join(' · ') : 'Nothing to install.';
+}
+
 async function installSelected() {
   if (!selected.value.size || !hasSave.value) return;
   busy.value = true;
+  folderResult.value = '';
+  installResult.value = '';
   await nextTick();
   try {
     const files = [...selected.value];
@@ -244,7 +331,9 @@ async function installSelected() {
       if (tag) handles[p] = tag;
     });
     startggHandles.value = handles;
-    importPaths.value = paths;
+    installResult.value = await installFiles(paths, handles);
+    selected.value = new Set();
+    await readTags();
   } catch (err) {
     saveError.value = String(err);
   } finally {
@@ -257,6 +346,7 @@ async function saveToFolder() {
   const dir = await open({ directory: true, title: 'Choose Download Folder' });
   if (!dir) return;
   busy.value = true;
+  installResult.value = '';
   try {
     const written = await invoke<string[]>('download_tags', {
       files: [...selected.value],
@@ -277,24 +367,31 @@ async function chooseFiles() {
     filters: [{ name: '.r2tag file', extensions: ['r2tag'] }],
   });
   if (!picked) return;
-  startggHandles.value = {};
-  importPaths.value = Array.isArray(picked) ? picked : [picked];
-}
-
-function doneImporting() {
-  importPaths.value = [];
-  selected.value = new Set();
-  readTags();
+  const paths = Array.isArray(picked) ? picked : [picked];
+  if (!hasSave.value) {
+    fileInstallResult.value = 'Choose a save file first.';
+    return;
+  }
+  busy.value = true;
+  fileInstallResult.value = '';
+  try {
+    fileInstallResult.value = await installFiles(paths, {});
+    await readTags();
+  } catch (err) {
+    saveError.value = String(err);
+  } finally {
+    busy.value = false;
+  }
 }
 </script>
 
 <template>
-  <AnimatedCard wide>
+  <AnimatedCard wide static>
     <div class="home-head">
       <span class="home-title">Rivals II Tag Tool</span>
       <span v-if="hasSave" class="home-save">
         <span class="home-dot" aria-hidden="true"></span>
-        <span class="home-save-name">{{ savePath.split(/[\\/]/).pop() }}</span>
+        <span class="home-save-name" :title="savePath">{{ abbreviatedSavePath }}</span>
         <span class="home-save-count">
           {{ loadingSave ? 'reading…' : `${tagNames.length} tags` }}
         </span>
@@ -305,28 +402,16 @@ function doneImporting() {
 
     <p v-if="saveError" class="error-msg">{{ saveError }}</p>
 
-    <Transition name="content-swap" mode="out-in">
-      <!-- Installing takes over the card: it's a decision point. -->
-      <div v-if="importPaths.length" key="import" class="view-stack">
-        <TagImportPanel
-          :save-path="savePath"
-          :existing-tag-names="tagNames"
-          :paths="importPaths"
-          :startgg-handles="startggHandles"
-          @restart="doneImporting"
-        />
-        <button class="linkish" @click="doneImporting">← Back</button>
-      </div>
+    <div class="view-stack">
+      <div class="home-cols">
+        <!-- Submit your tags -->
+        <div class="home-mine">
+          <div class="home-sources-head">
+            <span class="tag-panel-label">Submit your tags</span>
+            <span v-if="includedNames.length" class="home-sel">{{ includedNames.length }}</span>
+          </div>
 
-      <div v-else key="home" class="view-stack">
-        <div class="home-cols">
-          <!-- Submit your tags -->
           <div class="tag-panel">
-            <div class="tag-panel-header">
-              <span class="tag-panel-label">Submit your tags</span>
-              <span v-if="includedNames.length" class="home-sel">{{ includedNames.length }}</span>
-            </div>
-
             <div v-if="shareResult" class="home-shared">
               <p>Submitted {{ shareResult.count }} tag(s).</p>
               <button class="btn" @click="openUrl(shareResult.pr)">
@@ -380,6 +465,7 @@ function doneImporting() {
               </div>
             </template>
           </div>
+        </div>
 
           <!-- Where new tags come from -->
           <div class="home-sources">
@@ -428,7 +514,10 @@ function doneImporting() {
             <div class="source">
               <div class="source-title">From files on this PC</div>
               <div class="source-sub">.r2tag files someone sent you.</div>
-              <button class="btn" @click="chooseFiles">Choose Files</button>
+              <button class="btn" :disabled="busy" @click="chooseFiles">
+                {{ busy ? 'Installing…' : 'Choose Files' }}
+              </button>
+              <p v-if="fileInstallResult" class="source-status">{{ fileInstallResult }}</p>
             </div>
           </div>
         </div>
@@ -439,18 +528,31 @@ function doneImporting() {
             :disabled="!selectedCount || !hasSave || busy"
             @click="installSelected"
           >
-            {{ busy ? 'Downloading…' : `Install ${selectedCount || ''}`.trim() }}
+            {{ busy ? 'Installing…' : `Install ${selectedCount || ''}`.trim() }}
           </button>
           <button class="btn" :disabled="!selectedCount || busy" @click="saveToFolder">
             Save to Folder
           </button>
+          <div class="home-overwrite" @click="overwriteExisting = !overwriteExisting">
+            <span
+              class="tag-checkbox"
+              :class="{ 'tag-checkbox--checked': overwriteExisting }"
+              aria-hidden="true"
+            >
+              <svg v-if="overwriteExisting" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+              </svg>
+            </span>
+            <span>Overwrite existing tags</span>
+          </div>
           <span v-if="selectedCount && !hasSave" class="home-hint">Choose a save file first.</span>
+          <span v-else-if="installResult" class="home-hint">{{ installResult }}</span>
           <span v-else-if="folderResult" class="home-hint">{{ folderResult }}</span>
         </div>
       </div>
-    </Transition>
   </AnimatedCard>
 </template>
+
 
 <style scoped lang="scss">
 .home-head {
@@ -484,6 +586,10 @@ function doneImporting() {
 .home-save-name {
   font-family: 'Ubuntu Sans Mono Variable', monospace;
   color: var(--text-muted);
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .home-save-count {
@@ -498,7 +604,8 @@ function doneImporting() {
   align-items: start;
 }
 
-.home-sources {
+.home-sources,
+.home-mine {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -546,11 +653,12 @@ function doneImporting() {
 }
 
 /* With a tag selected, the start.gg linker and its results dropdown live
-   inside this list — let it grow with the page instead of scrolling on its
-   own, so there's only one scroll container instead of a nested one. */
+   inside this list. Letting it grow unbounded pushed the whole card past the
+   window; cap it instead, generous enough to roughly match the height of the
+   shared-database tile on the right. */
 .tag-list--open {
-  max-height: none;
-  overflow: visible;
+  max-height: 30rem;
+  overflow-y: auto;
 }
 
 .home-sel {
@@ -677,6 +785,28 @@ function doneImporting() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex-wrap: wrap;
+
+  .btn {
+    flex: 1 1 0;
+    width: auto;
+  }
+}
+
+.home-overwrite {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text-primary);
+  }
 }
 
 .home-hint {

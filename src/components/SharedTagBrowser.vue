@@ -17,7 +17,7 @@ export interface SharedTag {
   startggTag: string;
 }
 
-defineProps<{
+const props = defineProps<{
   /** Files currently selected, keyed by manifest file name. */
   selected: Set<string>;
   /** Downloaded copies, so a row can show its diff without re-fetching. */
@@ -37,12 +37,18 @@ const query = ref('');
 
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase();
-  if (!q) return tags.value;
-  return tags.value.filter(
-    t =>
-      t.name.toLowerCase().includes(q) ||
-      t.startggTag.toLowerCase().includes(q) ||
-      t.author.toLowerCase().includes(q),
+  const base = !q
+    ? tags.value
+    : tags.value.filter(
+        t =>
+          t.name.toLowerCase().includes(q) ||
+          t.startggTag.toLowerCase().includes(q) ||
+          t.author.toLowerCase().includes(q),
+      );
+  // Selected rows float to the top so you can see what you've picked; a
+  // stable sort keeps everything else in its existing relative order.
+  return [...base].sort(
+    (a, b) => Number(props.selected.has(b.file)) - Number(props.selected.has(a.file)),
   );
 });
 
@@ -106,6 +112,8 @@ defineExpose({ reload: load });
         <TagDiff
           v-if="previewPaths && previewPaths[t.file]"
           :path="previewPaths[t.file]"
+          :default-open="true"
+          :hide-count="true"
           class="browser-diff"
         />
         <button v-else class="browser-peek" @click="emit('preview', t.file)">

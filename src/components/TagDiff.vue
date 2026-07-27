@@ -6,7 +6,7 @@
 // The parse is done on demand (only when opened) because reading a .r2tag is
 // a real file read, and a browse list can hold hundreds of them.
 
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { diffTag, type TagDiff } from '../lib/tagDefaults';
 
@@ -16,6 +16,18 @@ const props = defineProps<{
   /** A tag already inside a save: the save's path plus the tag's name. */
   savePath?: string;
   tagName?: string;
+  /**
+   * Render already expanded and start loading right away, rather than
+   * waiting for a manual click. Used when the caller just fetched this tag
+   * on the user's behalf (e.g. the shared-database "changes" button), so a
+   * second click shouldn't be needed to actually see the diff.
+   */
+  defaultOpen?: boolean;
+  /**
+   * Hide the "N changes" count in the summary, showing just the word
+   * "changes" instead. Used for the shared-database rows.
+   */
+  hideCount?: boolean;
 }>();
 
 const diff = ref<TagDiff | null>(null);
@@ -23,8 +35,8 @@ const loading = ref(false);
 const errorMsg = ref('');
 const loaded = ref(false);
 
-async function onToggle(ev: Event) {
-  if (!(ev.target as HTMLDetailsElement).open || loaded.value || loading.value) return;
+async function loadDiff() {
+  if (loaded.value || loading.value) return;
   loading.value = true;
   errorMsg.value = '';
   try {
@@ -42,13 +54,28 @@ async function onToggle(ev: Event) {
     loading.value = false;
   }
 }
+
+function onToggle(ev: Event) {
+  if (!(ev.target as HTMLDetailsElement).open) return;
+  loadDiff();
+}
+
+onMounted(() => {
+  if (props.defaultOpen) loadDiff();
+});
 </script>
 
 <template>
-  <details class="tag-diff" @toggle="onToggle">
+  <details class="tag-diff" :open="defaultOpen" @toggle="onToggle">
     <summary class="tag-diff-summary">
       <template v-if="diff">
-        {{ diff.count === 0 ? 'stock controls' : `${diff.count} change${diff.count === 1 ? '' : 's'}` }}
+        {{
+          diff.count === 0
+            ? 'stock controls'
+            : hideCount
+              ? 'changes'
+              : `${diff.count} change${diff.count === 1 ? '' : 's'}`
+        }}
       </template>
       <template v-else>{{ loading ? 'reading…' : 'changes' }}</template>
     </summary>

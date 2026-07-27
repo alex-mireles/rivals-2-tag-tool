@@ -124,7 +124,11 @@ button:focus-visible {
 }
 
 .viewport {
-  min-height: 100vh;
+  // Must be a bounded height, not min-height: min-height lets .viewport grow
+  // past the window to fit its content, so scrollHeight === clientHeight and
+  // its own overflow-y never engages -- then #app's overflow: hidden clips
+  // whatever doesn't fit instead of letting it scroll into view.
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -186,6 +190,14 @@ button:focus-visible {
 // the original width.
 .card--wide {
   width: min(820px, calc(100vw - 2rem));
+}
+
+// Opt-out of the height-tracking animation (see AnimatedCard.vue's `static`
+// prop): no inline height is ever set in this mode, so `height: auto` here is
+// just documenting that fact, not overriding an inline style.
+.card--static {
+  height: auto;
+  overflow: visible;
 }
 
 .card-content {
