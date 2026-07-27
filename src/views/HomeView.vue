@@ -340,7 +340,7 @@ function doneImporting() {
               <p v-else-if="!tagNames.length && !loadingSave" class="home-empty">
                 No custom tags yet.
               </p>
-              <ul v-else class="tag-list">
+              <ul v-else class="tag-list" :class="{ 'tag-list--open': includedNames.length > 0 }">
                 <li v-for="name in tagNames" :key="name" class="home-tag">
                   <div class="home-tag-head" @click="toggleMine(name)">
                     <span
@@ -387,15 +387,14 @@ function doneImporting() {
               <span class="tag-panel-label">Install tags to your setup</span>
             </div>
 
-            <div class="source source--primary">
+            <div class="source">
               <div class="source-title">Everyone in a bracket</div>
-              <div class="source-sub">Paste a start.gg link.</div>
               <div class="source-row">
                 <input
                   v-model="bracketUrl"
                   class="home-input"
                   type="text"
-                  placeholder="start.gg/tournament/…"
+                  placeholder="Paste a start.gg link…"
                   @keydown.enter="findBracket"
                 />
                 <button class="btn" :disabled="bracketBusy || !bracketUrl.trim()" @click="findBracket">
@@ -546,6 +545,14 @@ function doneImporting() {
   }
 }
 
+/* With a tag selected, the start.gg linker and its results dropdown live
+   inside this list — let it grow with the page instead of scrolling on its
+   own, so there's only one scroll container instead of a nested one. */
+.tag-list--open {
+  max-height: none;
+  overflow: visible;
+}
+
 .home-sel {
   color: var(--text-muted);
 }
@@ -567,6 +574,11 @@ function doneImporting() {
   padding: 0.6em 0.25em 0.4em;
   border-top: 1px solid var(--line-divider);
   flex-wrap: wrap;
+
+  .btn {
+    flex: 1 1 0;
+    width: auto;
+  }
 }
 
 .home-sources-head {
@@ -589,10 +601,6 @@ function doneImporting() {
   border-radius: var(--radius-panel);
   font-size: 0.75rem;
 
-  &--primary {
-    border-color: var(--accent);
-  }
-
   &--browser {
     padding: 0.5rem 0.6rem;
   }
@@ -611,6 +619,12 @@ function doneImporting() {
   display: flex;
   gap: 0.35rem;
   align-items: center;
+
+  .btn {
+    flex: 0 0 auto;
+    width: auto;
+    padding-inline: 1em;
+  }
 }
 
 /* Inputs are styled per-view in this app; match the inset panels rather than

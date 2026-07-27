@@ -105,12 +105,7 @@ onBeforeUnmount(() => {
 <template>
   <div ref="root" class="sgg" :class="{ 'sgg--compact': compact }">
     <template v-if="!compact">
-      <span class="sgg-heading">start.gg account <span class="sgg-optional">(optional)</span></span>
-      <p class="sgg-hint">
-        Link your start.gg account to make these tags shareable on the tag-sharing site —
-        it writes an upload-ready sidecar next to each <code>.r2tag</code>. Leave blank to
-        just export the files. Search your gamer tag or paste your profile URL.
-      </p>
+      <span class="sgg-heading">start.gg account (if submitting)</span>
     </template>
 
     <!-- Selected -->
@@ -186,18 +181,6 @@ onBeforeUnmount(() => {
 .sgg-optional {
   color: var(--text-muted);
   letter-spacing: 0;
-}
-
-.sgg-hint {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  line-height: 1.35;
-
-  code {
-    font-family: 'Ubuntu Sans Mono Variable', monospace;
-    font-size: 0.95em;
-    color: var(--text-primary);
-  }
 }
 
 .sgg-search-wrap {
