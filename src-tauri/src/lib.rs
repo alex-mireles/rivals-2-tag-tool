@@ -10,7 +10,15 @@ pub fn run() {
             commands::tags::get_tag_names,
             commands::tags::export_tags,
             commands::tags::get_tag_previews,
+            commands::tags::read_tag_json,
+            commands::tags::read_tag_json_from_save,
             commands::tags::import_tags,
+            commands::startgg::startgg_search,
+            commands::startgg::startgg_user,
+            commands::startgg::startgg_event,
+            commands::site::share_tags_to_site,
+            commands::site::fetch_shared_tags,
+            commands::site::download_tags,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

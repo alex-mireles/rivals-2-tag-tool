@@ -16,7 +16,7 @@ const RESERVED_FILE_NAMES: [&str; 22] = [
 ];
 
 /// Make a tag name safe to use as a file stem on both Windows and macOS.
-fn sanitize_file_stem(name: &str) -> String {
+pub(crate) fn sanitize_file_stem(name: &str) -> String {
     let mut stem: String = name
         .chars()
         .map(|c| match c {
@@ -51,6 +51,16 @@ fn tag_name_of(sv: &StructValue) -> Option<&str> {
     None
 }
 
+/// Rename a tag in place, so two people sharing an in-game tag name can both be
+/// installed (the caller supplies the disambiguated name, e.g. a start.gg tag).
+fn set_tag_name(sv: &mut StructValue, name: &str) {
+    if let StructValue::Struct(props) = sv {
+        if let Some(Property::Str(existing)) = props.0.get_mut(&PropertyKey::from("TagName")) {
+            *existing = name.to_string();
+        }
+    }
+}
+
 /// Read the root `SaveVersion` (save-format version) from a save. Both `.sav`
 /// files and `.r2tag` files (which are full saves) carry this. Returns `None`
 /// if the property is absent or not an integer.
@@ -63,54 +73,63 @@ fn save_version(save: &Save) -> Option<i32> {
 
 #[tauri::command]
 pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let file = File::open(&save_path).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(file);
-        let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+    // Reads through the same cache the control diff uses, so opening the app and
+    // then expanding a tag costs one parse of the save, not two. Parsing is the
+    // expensive part: ~0.5s for a 9 MB save in a release build (and several
+    // times that under `tauri dev`, which is a debug build).
+    tauri::async_runtime::spawn_blocking(move || Ok(save_cache(&save_path)?.names))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
-        let tag_structs = match &save.root.properties["SavedPlayerTags"] {
-            Property::Array(ValueVec::Struct(structs)) => structs,
-            Property::Array(_) => return Err("SavedPlayerTags array does not contain structs".into()),
-            _ => return Err("SavedPlayerTags is not an array".into()),
-        };
+/// A start.gg account linked to the tags being exported.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartggLink {
+    /// User slug, e.g. `user/6192f6f1`.
+    pub slug: String,
+    /// Gamer tag, for display.
+    pub tag: String,
+}
 
-        let tag_names = tag_structs
-            .iter()
-            .filter_map(|sv| tag_name_of(sv))
-            .filter(|name| is_custom_tag(name))
-            .map(|name| name.to_string())
-            .collect();
+/// Read `save_path` and return the bytes of a one-tag `.r2tag` — the full save
+/// with only `tag_name` retained in `SavedPlayerTags`. Shared by file export
+/// and share-to-site.
+pub(crate) fn single_tag_save_bytes(save_path: &str, tag_name: &str) -> Result<Vec<u8>, String> {
+    let file = File::open(save_path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(file);
+    let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
 
-        Ok(tag_names)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    if let Property::Array(ValueVec::Struct(structs)) =
+        &mut save.root.properties["SavedPlayerTags"]
+    {
+        structs.retain(|sv| tag_name_of(sv) == Some(tag_name));
+    } else {
+        return Err("SavedPlayerTags is not a struct array".into());
+    }
+
+    let mut buf = Vec::new();
+    save.write(&mut buf).map_err(|e| e.to_string())?;
+    Ok(buf)
 }
 
 /// Export the named tags as individual .r2tag files (binary save format) into output_dir.
-/// Returns the list of paths that were written.
+/// When a start.gg account is linked, also writes a `<stem>.json` sidecar next to each
+/// `.r2tag` (the same shape the tag-sharing website uses) so exports are upload-ready.
+/// Returns the list of `.r2tag` paths that were written.
 #[tauri::command]
 pub async fn export_tags(
     save_path: String,
     tag_names: Vec<String>,
     output_dir: String,
+    startgg: Option<StartggLink>,
 ) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut written = Vec::new();
         let mut used_stems = std::collections::HashSet::new();
 
         for tag_name in &tag_names {
-            let file = File::open(&save_path).map_err(|e| e.to_string())?;
-            let mut reader = BufReader::new(file);
-            let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-            if let Property::Array(ValueVec::Struct(structs)) =
-                &mut save.root.properties["SavedPlayerTags"]
-            {
-                structs.retain(|sv| tag_name_of(sv) == Some(tag_name.as_str()));
-            } else {
-                return Err("SavedPlayerTags is not a struct array".into());
-            }
+            let bytes = single_tag_save_bytes(&save_path, tag_name)?;
 
             // Distinct tag names can collide after sanitizing (e.g. "a/b" and "a:b");
             // suffix a counter so one export doesn't overwrite another.
@@ -123,9 +142,19 @@ pub async fn export_tags(
             }
 
             let out_path = std::path::Path::new(&output_dir).join(format!("{stem}.r2tag"));
-            let mut out_file = File::create(&out_path).map_err(|e| e.to_string())?;
-            save.write(&mut out_file).map_err(|e| e.to_string())?;
+            std::fs::write(&out_path, &bytes).map_err(|e| e.to_string())?;
             written.push(out_path.to_string_lossy().to_string());
+
+            // Write the website-style sidecar so the exported tag is upload-ready.
+            if let Some(link) = &startgg {
+                let sidecar = serde_json::json!({
+                    "name": tag_name,
+                    "startgg": { "slug": link.slug, "tag": link.tag },
+                });
+                let side_path = std::path::Path::new(&output_dir).join(format!("{stem}.json"));
+                let body = serde_json::to_string_pretty(&sidecar).map_err(|e| e.to_string())?;
+                std::fs::write(&side_path, body + "\n").map_err(|e| e.to_string())?;
+            }
         }
 
         Ok(written)
@@ -200,11 +229,135 @@ pub async fn get_tag_previews(
     .map_err(|e| e.to_string())?
 }
 
+/// The parsed contents of a `.r2tag` (or save) as JSON, for the control-diff
+/// view: "what did this tag change from the defaults?".
+///
+/// This is uesave's own serialization, which is exactly what the tag-sharing
+/// website's WASM build returns — so `src/lib/tagdiff.ts` is a straight port of
+/// the site's `tagdiff.js` and the two can't drift on shape.
+/// What one parse of a save yields: the custom tag names, and per tag a tree
+/// shaped exactly like a `.r2tag`'s so the frontend has a single code path.
+#[derive(Clone)]
+struct SaveCache {
+    names: Vec<String>,
+    trees: std::collections::HashMap<String, serde_json::Value>,
+}
+
+/// A save is tens of megabytes and parsing it dominates every operation here
+/// (~0.5s for 9 MB in release, several seconds in a debug build), so parse it
+/// once per (path, mtime) and answer everything else from memory. Writing to
+/// the save changes its mtime, which invalidates this on its own.
+static SAVE_CACHE: std::sync::Mutex<Option<(String, std::time::SystemTime, SaveCache)>> =
+    std::sync::Mutex::new(None);
+
+fn save_cache(save_path: &str) -> Result<SaveCache, String> {
+    let mtime = std::fs::metadata(save_path)
+        .and_then(|m| m.modified())
+        .map_err(|e| e.to_string())?;
+
+    if let Ok(guard) = SAVE_CACHE.lock() {
+        if let Some((path, cached_mtime, cache)) = guard.as_ref() {
+            if path == save_path && *cached_mtime == mtime {
+                return Ok(cache.clone());
+            }
+        }
+    }
+
+    let file = File::open(save_path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(file);
+    let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+    let save_game_type =
+        serde_json::to_value(&save.root.save_game_type).map_err(|e| e.to_string())?;
+
+    // Every tag in file order, so the serialized array below lines up.
+    let all_names: Vec<String> = match &save.root.properties["SavedPlayerTags"] {
+        Property::Array(ValueVec::Struct(structs)) => structs
+            .iter()
+            .map(|sv| tag_name_of(sv).unwrap_or_default().to_string())
+            .collect(),
+        Property::Array(_) => {
+            return Err("SavedPlayerTags array does not contain structs".into())
+        }
+        _ => return Err("SavedPlayerTags is not an array".into()),
+    };
+
+    let root = serde_json::to_value(&save.root).map_err(|e| e.to_string())?;
+    let array = root
+        .get("properties")
+        .and_then(|p| p.get("SavedPlayerTags_0"))
+        .and_then(|v| v.as_array())
+        .ok_or("SavedPlayerTags_0 missing from serialized save")?;
+
+    let mut trees = std::collections::HashMap::new();
+    for (name, value) in all_names.iter().zip(array.iter()) {
+        if name.is_empty() {
+            continue;
+        }
+        trees.insert(
+            name.clone(),
+            serde_json::json!({
+                "save_game_type": save_game_type,
+                "properties": { "SavedPlayerTags_0": [value] }
+            }),
+        );
+    }
+
+    let cache = SaveCache {
+        names: all_names
+            .iter()
+            .filter(|n| is_custom_tag(n))
+            .cloned()
+            .collect(),
+        trees,
+    };
+
+    if let Ok(mut guard) = SAVE_CACHE.lock() {
+        *guard = Some((save_path.to_string(), mtime, cache.clone()));
+    }
+    Ok(cache)
+}
+
+/// Same as `read_tag_json`, but for a tag that lives inside the loaded save
+/// rather than a `.r2tag` on disk — so the control diff works for the tags you
+/// already have, not just ones you're about to install.
+#[tauri::command]
+pub async fn read_tag_json_from_save(
+    save_path: String,
+    tag_name: String,
+) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        save_cache(&save_path)?
+            .trees
+            .get(&tag_name)
+            .cloned()
+            .ok_or_else(|| format!("tag '{tag_name}' not found in save"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn read_tag_json(path: String) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = File::open(&path).map_err(|e| e.to_string())?;
+        let mut reader = BufReader::new(file);
+        let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+        serde_json::to_value(&save.root).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImportInstruction {
     pub path: String,
     pub tag_name: String,
     pub overwrite: bool,
+    /// Install the tag under a different in-save name. Used when two people
+    /// share an in-game tag name — without it the second install would collide
+    /// with (and overwrite, or be skipped against) the first.
+    #[serde(default)]
+    pub rename: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -240,10 +393,22 @@ pub async fn import_tags(
                 _ => return Err("SavedPlayerTags is not a struct array in destination save".into()),
             };
 
+            // Where the next installed tag goes. Slot 0 is the player's own tag
+            // — the game treats it as theirs — so installs never displace it;
+            // they land directly after it, in the order they were chosen.
+            let mut insert_at = if dest_structs.is_empty() { 0 } else { 1 };
+
             for instruction in instructions {
+                // The name it will actually carry in the save: `rename` lets two
+                // people who share an in-game tag name both be installed.
+                let install_name = instruction
+                    .rename
+                    .clone()
+                    .unwrap_or_else(|| instruction.tag_name.clone());
+
                 let existing_pos = dest_structs
                     .iter()
-                    .position(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()));
+                    .position(|sv| tag_name_of(sv) == Some(install_name.as_str()));
 
                 if existing_pos.is_some() && !instruction.overwrite {
                     skipped.push(instruction.tag_name);
@@ -267,19 +432,28 @@ pub async fn import_tags(
                     _ => return Err(format!("{}: unexpected format", instruction.path)),
                 };
 
-                let tag_sv = source_structs
+                let mut tag_sv = source_structs
                     .iter()
                     .find(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()))
                     .ok_or_else(|| format!("{}: tag '{}' not found", instruction.path, instruction.tag_name))?
                     .clone();
 
-                if let Some(pos) = existing_pos {
-                    dest_structs[pos] = tag_sv;
-                } else {
-                    dest_structs.push(tag_sv);
+                if instruction.rename.is_some() {
+                    set_tag_name(&mut tag_sv, &install_name);
                 }
 
-                imported.push(instruction.tag_name);
+                match existing_pos {
+                    // Overwrite in place — including slot 0, whose content may be
+                    // replaced even though nothing is allowed to displace it.
+                    Some(pos) => dest_structs[pos] = tag_sv,
+                    None => {
+                        let at = insert_at.min(dest_structs.len());
+                        dest_structs.insert(at, tag_sv);
+                        insert_at = at + 1;
+                    }
+                }
+
+                imported.push(install_name);
             }
         }
 

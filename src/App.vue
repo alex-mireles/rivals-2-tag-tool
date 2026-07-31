@@ -1,34 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import LoadView from './views/LoadView.vue';
-import ExportView from './views/ExportView.vue';
-import ImportView from './views/ImportView.vue';
-import type { SaveFileState } from './types';
+import HomeView from './views/HomeView.vue';
 
 const appWindow = getCurrentWindow();
 
-type ViewName = 'load' | 'export' | 'import';
-
-const currentView = ref<ViewName>('load');
-const transitionName = ref('slide-forward');
-
-const saveFileState = ref<SaveFileState>({
-  savePath: '',
-  savePathError: false,
-  tagNames: [],
-  hasLoaded: false,
-});
-
-function navigateTo(view: ViewName) {
-  transitionName.value = 'slide-forward';
-  currentView.value = view;
-}
-
-function goBack() {
-  transitionName.value = 'slide-back';
-  currentView.value = 'load';
-}
+// Everything happens on one screen now — submitting your tags and installing
+// other people's are two columns, not two destinations — so there is no view
+// switching left to do.
 </script>
 
 <template>
@@ -49,57 +27,6 @@ function goBack() {
   </div>
 
   <div class="viewport">
-    <Transition :name="transitionName" mode="out-in">
-      <LoadView
-        v-if="currentView === 'load'"
-        key="load"
-        :initial-state="saveFileState"
-        @state-change="(s: SaveFileState) => (saveFileState = s)"
-        @navigate="navigateTo"
-      />
-      <ExportView
-        v-else-if="currentView === 'export'"
-        key="export"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-      />
-      <ImportView
-        v-else
-        key="import"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-      />
-    </Transition>
+    <HomeView />
   </div>
 </template>
-
-<style scoped lang="scss">
-.slide-forward-enter-active,
-.slide-forward-leave-active,
-.slide-back-enter-active,
-.slide-back-leave-active {
-  transition: opacity 0.25s ease, transform 0.3s ease;
-}
-
-.slide-forward-enter-from {
-  opacity: 0;
-  transform: translateX(40px);
-}
-
-.slide-forward-leave-to {
-  opacity: 0;
-  transform: translateX(-40px);
-}
-
-.slide-back-enter-from {
-  opacity: 0;
-  transform: translateX(-40px);
-}
-
-.slide-back-leave-to {
-  opacity: 0;
-  transform: translateX(40px);
-}
-</style>

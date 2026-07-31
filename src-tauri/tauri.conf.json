@@ -13,9 +13,9 @@
     "windows": [
       {
         "title": "Rivals II Tag Tool",
-        "width": 800,
-        "height": 600,
-        "resizable": false,
+        "width": 1100,
+        "height": 950,
+        "resizable": true,
         "decorations": false
       }
     ],

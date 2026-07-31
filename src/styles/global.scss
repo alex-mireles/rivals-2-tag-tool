@@ -124,11 +124,55 @@ button:focus-visible {
 }
 
 .viewport {
-  min-height: 100vh;
+  // Must be a bounded height, not min-height: min-height lets .viewport grow
+  // past the window to fit its content, so scrollHeight === clientHeight and
+  // its own overflow-y never engages -- then #app's overflow: hidden clips
+  // whatever doesn't fit instead of letting it scroll into view.
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  // Tall content (the home screen with both columns filled) has to stay
+  // reachable rather than being clipped at the window edge.
+  overflow-y: auto;
+  padding: 2.5rem 1rem 1.5rem;
+}
+
+// Once the card is taller than the window, centring would push its head off the
+// top; start at the top instead so scrolling reaches everything.
+@media (max-height: 820px) {
+  .viewport {
+    align-items: flex-start;
+  }
+}
+
+// The platform scrollbar is a bright slab against these dark panels; make it a
+// thin, quiet track that only really shows on hover.
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 // Shell rendered by AnimatedCard.vue; its inline height tracks .card-content.
@@ -140,6 +184,20 @@ button:focus-visible {
   border-radius: var(--radius-card);
   color: var(--text-primary);
   transition: height 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+// The home screen runs two columns side by side; the single-column flows keep
+// the original width.
+.card--wide {
+  width: min(1000px, calc(100vw - 2rem));
+}
+
+// Opt-out of the height-tracking animation (see AnimatedCard.vue's `static`
+// prop): no inline height is ever set in this mode, so `height: auto` here is
+// just documenting that fact, not overriding an inline style.
+.card--static {
+  height: auto;
+  overflow: visible;
 }
 
 .card-content {
@@ -197,8 +255,14 @@ button:focus-visible {
     }
   }
 
+  /* An opacity-only disabled state faded the label into the dark background
+     until it was unreadable. Give disabled buttons an explicit muted fill
+     instead — legible text, still obviously inactive — rather than just
+     dimming whatever background (accent or none) the button already had. */
   &:disabled {
-    opacity: 0.4;
+    opacity: 1;
+    background: var(--surface-inset);
+    color: var(--text-muted);
     cursor: not-allowed;
     transform: none;
   }
