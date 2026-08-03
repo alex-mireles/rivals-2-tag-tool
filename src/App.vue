@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import LoadView from './views/LoadView.vue';
 import ExportView from './views/ExportView.vue';
 import ImportView from './views/ImportView.vue';
+import CloudView from './views/CloudView.vue';
 import type { SaveFileState } from './types';
 
 const appWindow = getCurrentWindow();
 
-type ViewName = 'load' | 'export' | 'import';
+type ViewName = 'load' | 'export' | 'import' | 'cloud';
 
 const currentView = ref<ViewName>('load');
 const transitionName = ref('slide-forward');
+
+onMounted(() => { void invoke('cleanup_stale_cloud_files').catch(() => undefined); });
 
 const saveFileState = ref<SaveFileState>({
   savePath: '',
@@ -28,6 +32,10 @@ function navigateTo(view: ViewName) {
 function goBack() {
   transitionName.value = 'slide-back';
   currentView.value = 'load';
+}
+
+function updateTagNames(names: string[]) {
+  saveFileState.value = { ...saveFileState.value, tagNames: names, hasLoaded: true };
 }
 </script>
 
@@ -65,11 +73,20 @@ function goBack() {
         @go-back="goBack"
       />
       <ImportView
-        v-else
+        v-else-if="currentView === 'import'"
         key="import"
         :save-path="saveFileState.savePath"
         :tag-names="saveFileState.tagNames"
         @go-back="goBack"
+        @tags-changed="updateTagNames"
+      />
+      <CloudView
+        v-else
+        key="cloud"
+        :save-path="saveFileState.savePath"
+        :tag-names="saveFileState.tagNames"
+        @go-back="goBack"
+        @tags-changed="updateTagNames"
       />
     </Transition>
   </div>

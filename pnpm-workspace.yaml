@@ -1,3 +1,6 @@
+packages:
+  - infra
+
 allowBuilds:
   '@parcel/watcher': true
   esbuild: true

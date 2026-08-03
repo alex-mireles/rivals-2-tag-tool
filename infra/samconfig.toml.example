@@ -1,0 +1,15 @@
+version = 0.1
+
+[production.deploy.parameters]
+stack_name = "rivals-2-tag-tool-infra"
+resolve_s3 = true
+s3_prefix = "rivals-2-tag-tool-infra"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+parameter_overrides = "EnvironmentName=production StartGgClientId=REPLACE_ME ApiDomainName=api.rivals2tagtool.com Route53HostedZoneId=REPLACE_ME Rivals2VideogameId=53945 MaxCompressedBytes=2097152 MaxUncompressedBytes=8388608 LogRetentionDays=14"
+profile = "r2tagtool-admin"
+image_repositories = []
+
+[production.global.parameters]
+region = "us-east-1"

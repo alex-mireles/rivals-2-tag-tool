@@ -1,3 +1,4 @@
+pub mod cloud;
 pub mod tags;
 
 use tauri::Manager;

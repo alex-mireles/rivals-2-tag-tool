@@ -54,8 +54,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_CLOUD_API_BASE_URL: ${{ vars.VITE_CLOUD_API_BASE_URL }}
         with:
-          tagName: v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          tagName: ${{ github.ref_name }}
           releaseName: 'Rivals II Tag Tool v__VERSION__'
           releaseBody: |
             Download the asset for your platform:

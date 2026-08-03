@@ -7,23 +7,32 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and package-manager storage
+node_modules
+.pnpm-store/
+
+# Build output
+dist
+dist-ssr
+
+# AWS SAM build output and local deployment configuration
+/.aws-sam/
+/infra/.aws-sam/
+/infra/samconfig.toml
+
+# Local environment configuration and test data
+*.local
+test-data
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
 
-node_modules
-dist
-dist-ssr
-*.local
-test-data
-
-# AI stuff
-.claude
-graphify-out
+# Operating-system files
+.DS_Store

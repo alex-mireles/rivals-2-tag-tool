@@ -24,6 +24,9 @@ Export your custom player tag and controls to a `.r2tag` file, then send it to y
 **Tournament Organizers:**
 Gather all of your entrants' `.r2tag` files, and import them directly onto your setups!
 
+**Cloud sharing:**
+Sign in with start.gg to publish one canonical tag, or search for an exact player/tournament and import every available uploaded tag. Cloud files are gzip-compressed before upload and are still checked locally before the game save is modified.
+
 ## Contributing / Development Setup
 
 The app is built with [Tauri v2](https://v2.tauri.app/), using a Vue 3 + TypeScript frontend and a Rust backend.
@@ -43,8 +46,11 @@ pnpm install        # install frontend dependencies
 pnpm tauri dev      # run the app with hot reload
 pnpm tauri build    # produce a portable Windows build or macOS disk image
 pnpm lint           # lint the frontend
+pnpm --filter rivals-2-tag-tool-infra test         # run cloud service tests
 cargo test --manifest-path src-tauri/Cargo.toml   # run backend tests
 ```
+
+Production builds require `VITE_CLOUD_API_BASE_URL`. The AWS SAM service and deployment procedure are documented in [`infra/README.md`](infra/README.md).
 
 Save file parsing is handled by the [uesave](https://crates.io/crates/uesave) crate. Shoutouts to the [uesave source code repo](https://github.com/trumank/uesave).
 
@@ -91,6 +97,10 @@ It's a custom file containing a single player tag: the tag name and its custom c
 **What happens if an imported tag already exists on the setup?**
 
 The import screen flags it as a conflict. Conflicts default to **Skip**; toggle individual tags to **Overwrite** if you want to replace the existing version.
+
+**What becomes public when I publish a cloud tag?**
+
+Your public start.gg gamer tag and profile slug, the in-game tag name, save-format version, and compressed controls file become searchable/downloadable. The service does not store your email or start.gg OAuth tokens.
 
 **Why don't I see Player1–Player4 in the tag list?**
 

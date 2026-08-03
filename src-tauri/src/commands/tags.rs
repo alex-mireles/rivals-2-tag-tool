@@ -1,7 +1,7 @@
-use std::fs::File;
-use std::io::BufReader;
-use uesave::{Property, PropertyKey, Save, StructValue, ValueVec};
 use serde::{Deserialize, Serialize};
+use std::fs::File;
+use std::io::{BufReader, Cursor};
+use uesave::{Property, PropertyKey, Save, StructValue, ValueVec};
 
 pub const DEFAULT_TAG_NAMES: [&str; 4] = ["Player1", "Player2", "Player3", "Player4"];
 
@@ -54,11 +54,45 @@ fn tag_name_of(sv: &StructValue) -> Option<&str> {
 /// Read the root `SaveVersion` (save-format version) from a save. Both `.sav`
 /// files and `.r2tag` files (which are full saves) carry this. Returns `None`
 /// if the property is absent or not an integer.
-fn save_version(save: &Save) -> Option<i32> {
-    match save.root.properties.0.get(&PropertyKey::from("SaveVersion")) {
+pub(crate) fn save_version(save: &Save) -> Option<i32> {
+    match save
+        .root
+        .properties
+        .0
+        .get(&PropertyKey::from("SaveVersion"))
+    {
         Some(Property::Int(v)) => Some(*v),
         _ => None,
     }
+}
+
+/// Build the exact single-tag save payload used by both local export and cloud
+/// upload. This only reads the source save and never writes it.
+pub(crate) fn single_tag_bytes(
+    save_path: &str,
+    tag_name: &str,
+) -> Result<(Vec<u8>, Option<i32>), String> {
+    if !is_custom_tag(tag_name) {
+        return Err("Built-in player tags cannot be exported".into());
+    }
+
+    let file = File::open(save_path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(file);
+    let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+    let version = save_version(&save);
+
+    let tag_structs = match &mut save.root.properties["SavedPlayerTags"] {
+        Property::Array(ValueVec::Struct(structs)) => structs,
+        _ => return Err("SavedPlayerTags is not a struct array".into()),
+    };
+    tag_structs.retain(|sv| tag_name_of(sv) == Some(tag_name));
+    if tag_structs.len() != 1 {
+        return Err(format!("Tag '{tag_name}' was not found exactly once"));
+    }
+
+    let mut bytes = Cursor::new(Vec::new());
+    save.write(&mut bytes).map_err(|e| e.to_string())?;
+    Ok((bytes.into_inner(), version))
 }
 
 #[tauri::command]
@@ -70,7 +104,9 @@ pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
 
         let tag_structs = match &save.root.properties["SavedPlayerTags"] {
             Property::Array(ValueVec::Struct(structs)) => structs,
-            Property::Array(_) => return Err("SavedPlayerTags array does not contain structs".into()),
+            Property::Array(_) => {
+                return Err("SavedPlayerTags array does not contain structs".into())
+            }
             _ => return Err("SavedPlayerTags is not an array".into()),
         };
 
@@ -100,17 +136,7 @@ pub async fn export_tags(
         let mut used_stems = std::collections::HashSet::new();
 
         for tag_name in &tag_names {
-            let file = File::open(&save_path).map_err(|e| e.to_string())?;
-            let mut reader = BufReader::new(file);
-            let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-            if let Property::Array(ValueVec::Struct(structs)) =
-                &mut save.root.properties["SavedPlayerTags"]
-            {
-                structs.retain(|sv| tag_name_of(sv) == Some(tag_name.as_str()));
-            } else {
-                return Err("SavedPlayerTags is not a struct array".into());
-            }
+            let (bytes, _) = single_tag_bytes(&save_path, tag_name)?;
 
             // Distinct tag names can collide after sanitizing (e.g. "a/b" and "a:b");
             // suffix a counter so one export doesn't overwrite another.
@@ -123,8 +149,7 @@ pub async fn export_tags(
             }
 
             let out_path = std::path::Path::new(&output_dir).join(format!("{stem}.r2tag"));
-            let mut out_file = File::create(&out_path).map_err(|e| e.to_string())?;
-            save.write(&mut out_file).map_err(|e| e.to_string())?;
+            std::fs::write(&out_path, bytes).map_err(|e| e.to_string())?;
             written.push(out_path.to_string_lossy().to_string());
         }
 
@@ -270,7 +295,12 @@ pub async fn import_tags(
                 let tag_sv = source_structs
                     .iter()
                     .find(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()))
-                    .ok_or_else(|| format!("{}: tag '{}' not found", instruction.path, instruction.tag_name))?
+                    .ok_or_else(|| {
+                        format!(
+                            "{}: tag '{}' not found",
+                            instruction.path, instruction.tag_name
+                        )
+                    })?
                     .clone();
 
                 if let Some(pos) = existing_pos {

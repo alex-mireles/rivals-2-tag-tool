@@ -11,6 +11,16 @@ pub fn run() {
             commands::tags::export_tags,
             commands::tags::get_tag_previews,
             commands::tags::import_tags,
+            commands::cloud::cloud_begin_auth,
+            commands::cloud::cloud_poll_auth,
+            commands::cloud::cloud_end_session,
+            commands::cloud::cloud_search_tags,
+            commands::cloud::cloud_tournament_tags,
+            commands::cloud::cloud_upload_tag,
+            commands::cloud::cloud_delete_tag,
+            commands::cloud::cloud_download_tags,
+            commands::cloud::cleanup_cloud_files,
+            commands::cloud::cleanup_stale_cloud_files,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

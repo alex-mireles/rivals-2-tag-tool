@@ -12,7 +12,7 @@ const appVersion = APP_VERSION;
 const props = defineProps<{ initialState: SaveFileState }>();
 
 const emit = defineEmits<{
-  navigate: [view: 'export' | 'import'];
+  navigate: [view: 'export' | 'import' | 'cloud'];
   stateChange: [state: SaveFileState];
 }>();
 
@@ -154,13 +154,14 @@ async function loadTagNames() {
     </Transition>
 
     <Transition name="fade">
-      <div v-if="hasLoaded && tagNames.length !== 0" class="action-row">
+      <div v-if="hasLoaded" class="action-row">
         <button class="btn btn-primary" @click="emit('navigate', 'import')">
           Import or Overwrite Tags
         </button>
-        <button class="btn btn-primary" @click="emit('navigate', 'export')">
+        <button class="btn btn-primary" :disabled="tagNames.length === 0" @click="emit('navigate', 'export')">
           Export Tags
         </button>
+        <button class="btn btn-primary" @click="emit('navigate', 'cloud')">Cloud Tags</button>
       </div>
     </Transition>
   </AnimatedCard>
@@ -231,6 +232,7 @@ async function loadTagNames() {
 
   .btn {
     flex: 1;
+    font-size: 0.78em;
   }
 }
 

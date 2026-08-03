@@ -6,7 +6,12 @@ const host = process.env.TAURI_DEV_HOST;
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
 // https://vite.dev/config/
-export default defineConfig(async () => ({
+export default defineConfig(async ({ command }) => {
+  if (command === 'build' && !process.env.VITE_CLOUD_API_BASE_URL) {
+    throw new Error('VITE_CLOUD_API_BASE_URL is required for production builds');
+  }
+
+  return ({
   plugins: [
     vue()
   ],
@@ -36,4 +41,5 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-}));
+  });
+});
