@@ -7,10 +7,11 @@ defineProps<{
 
 <template>
   <div class="save-path-bar">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="save-path-bar-icon" aria-hidden="true">
-      <path d="M2 2h5l1.5 2H14v10H2V2z" stroke="rgba(200,180,230,0.35)" stroke-width="1.5" />
-    </svg>
+    <v-icon name="md-folderopen-round" scale="0.9" class="save-path-bar-icon" />
+
     <span class="save-path-bar-label" :class="`save-path-bar-label--${status ?? 'success'}`">{{ label }}</span>
+    <!-- Reload / change controls; omitted on read-only bars. -->
+    <slot name="actions" />
   </div>
 </template>
 
@@ -27,10 +28,11 @@ defineProps<{
 
   &-icon {
     flex-shrink: 0;
-    opacity: 0.7;
+    color: rgba(200, 180, 230, 0.35);
   }
 
   &-label {
+    flex: 1;
     font-family: 'Ubuntu Sans Mono Variable', monospace;
     font-size: 0.7em;
     min-width: 0;

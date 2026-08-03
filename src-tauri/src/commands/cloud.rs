@@ -17,7 +17,20 @@ use url::Url;
 use super::tags::single_tag_bytes;
 
 const MAX_COMPRESSED_BYTES: usize = 2 * 1024 * 1024;
-const MAX_UNCOMPRESSED_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_UNCOMPRESSED_BYTES: usize = 8 * 1024 * 1024;
+
+/// Scratch directory for tag files waiting to be reviewed and imported —
+/// cloud downloads and `.r2pack` extractions alike. Both have the same
+/// lifecycle (write, preview, import, delete), so they share the cleanup
+/// commands below. The directory name predates `.r2pack` support and is kept
+/// so the stale sweep still finds files left by earlier versions.
+pub(crate) fn staging_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("cloud-tags"))
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -287,17 +300,25 @@ fn decode_cloud_payload_with_limits(
     Ok(bytes)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudDownload {
+    pub startgg_user_id: String,
+    pub path: String,
+}
+
+/// Download the requested tags into the staging cache.
+///
+/// Each result carries the user id it belongs to. Callers pair downloads with
+/// their metadata to name archive entries, and a positional result would let a
+/// single reordering silently file a tag under the wrong player's name.
 #[tauri::command]
 pub async fn cloud_download_tags(
     app: tauri::AppHandle,
     api_base_url: String,
     tags: Vec<CloudDownloadRequest>,
-) -> Result<Vec<String>, String> {
-    let cache_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("cloud-tags");
+) -> Result<Vec<CloudDownload>, String> {
+    let cache_dir = staging_dir(&app)?;
     fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
     let http = client()?;
     let mut paths = Vec::with_capacity(tags.len());
@@ -329,7 +350,10 @@ pub async fn cloud_download_tags(
         );
         let path = cache_dir.join(file_name);
         fs::write(&path, bytes).map_err(|e| e.to_string())?;
-        paths.push(path.to_string_lossy().to_string());
+        paths.push(CloudDownload {
+            startgg_user_id: tag.startgg_user_id,
+            path: path.to_string_lossy().to_string(),
+        });
     }
     Ok(paths)
 }
@@ -348,11 +372,7 @@ fn remove_if_in_cache(cache_dir: &Path, path: &Path) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn cleanup_cloud_files(app: tauri::AppHandle, paths: Vec<String>) -> Result<(), String> {
-    let cache_dir: PathBuf = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("cloud-tags");
+    let cache_dir = staging_dir(&app)?;
     if !cache_dir.exists() {
         return Ok(());
     }
@@ -364,11 +384,7 @@ pub async fn cleanup_cloud_files(app: tauri::AppHandle, paths: Vec<String>) -> R
 
 #[tauri::command]
 pub async fn cleanup_stale_cloud_files(app: tauri::AppHandle) -> Result<(), String> {
-    let cache_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("cloud-tags");
+    let cache_dir = staging_dir(&app)?;
     if !cache_dir.exists() {
         return Ok(());
     }

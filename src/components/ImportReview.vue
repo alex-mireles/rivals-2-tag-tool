@@ -22,7 +22,10 @@ const result = ref<ImportResult | null>(null);
 const errorMsg = ref('');
 
 const compatiblePreviews = computed(() => props.previews.filter((preview) => preview.compatible));
-const incompatibleCount = computed(() => props.previews.length - compatiblePreviews.value.length);
+const unreadableCount = computed(() => props.previews.filter((preview) => preview.error).length);
+const incompatibleCount = computed(
+  () => props.previews.length - compatiblePreviews.value.length - unreadableCount.value,
+);
 const conflictNames = computed(() => new Set(
   compatiblePreviews.value.map((preview) => preview.tag_name).filter((name) => props.tagNames.includes(name)),
 ));
@@ -73,12 +76,17 @@ async function doImport() {
         <ul class="result-list"><li v-for="name in result.incompatible" :key="name">✕ {{ name }}</li></ul>
       </div>
     </div>
+    <p v-if="result.imported.length" class="hint">
+      Restart Rivals 2 if it is open — it rewrites this file on exit and would discard these tags.
+    </p>
     <button class="btn btn-primary" @click="emit('reset')">{{ resetLabel ?? 'Import More' }}</button>
   </div>
 
   <div v-else-if="isImporting" class="loading-panel">Writing to save file...</div>
 
   <div v-else class="view-stack">
+    <!-- Provenance / compatibility context from the caller (e.g. a .r2pack). -->
+    <slot name="banner" />
     <div class="tag-panel">
       <div class="tag-panel-header">
         <span class="tag-panel-label">Tags to Import <small v-if="saveVersion !== null">Save v{{ saveVersion }}</small></span>
@@ -86,8 +94,9 @@ async function doImport() {
       </div>
       <ul class="tag-list">
         <li v-for="preview in previews" :key="preview.path" class="tag-row review-row" :class="{ incompatible: !preview.compatible }">
-          <div><strong>{{ preview.tag_name }}</strong><small>{{ preview.path.split(/[\\/]/).pop() }}</small></div>
-          <span v-if="!preview.compatible" class="badge badge--error">{{ preview.version === null ? 'Unknown version' : `v${preview.version}` }}</span>
+          <div><strong>{{ preview.tag_name }}</strong><small>{{ preview.error ?? preview.path.split(/[\\/]/).pop() }}</small></div>
+          <span v-if="preview.error" class="badge badge--error">Unreadable</span>
+          <span v-else-if="!preview.compatible" class="badge badge--error">{{ preview.version === null ? 'Unknown version' : `v${preview.version}` }}</span>
           <button v-else-if="conflictNames.has(preview.tag_name)" class="small-btn" @click="toggleOverwrite(preview.tag_name)">
             {{ overwriteSet.has(preview.tag_name) ? 'Overwrite' : 'Skip' }}
           </button>
@@ -97,6 +106,7 @@ async function doImport() {
     </div>
     <p v-if="conflictNames.size" class="hint">Conflicts default to <strong>Skip</strong>.</p>
     <p v-if="incompatibleCount" class="hint"><strong>{{ incompatibleCount }}</strong> tag(s) were saved under a different game version and cannot be imported.</p>
+    <p v-if="unreadableCount" class="hint"><strong>{{ unreadableCount }}</strong> file(s) could not be read and will be skipped.</p>
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
     <button class="btn btn-primary" :disabled="compatiblePreviews.length === 0" @click="doImport">
       Import {{ compatiblePreviews.length }} Compatible Tag{{ compatiblePreviews.length === 1 ? '' : 's' }}

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::{BufReader, Cursor};
 use uesave::{Property, PropertyKey, Save, StructValue, ValueVec};
@@ -15,10 +16,18 @@ const RESERVED_FILE_NAMES: [&str; 22] = [
     "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
 ];
 
+/// Bidi overrides and zero-width characters. A tag containing U+202E renders
+/// `evil<RLO>gnp.r2tag` as `evilgat2r.png` in a file listing, so they are
+/// dropped rather than mapped to `_`.
+fn is_deceptive_char(c: char) -> bool {
+    matches!(c, '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}')
+}
+
 /// Make a tag name safe to use as a file stem on both Windows and macOS.
-fn sanitize_file_stem(name: &str) -> String {
+pub(crate) fn sanitize_file_stem(name: &str) -> String {
     let mut stem: String = name
         .chars()
+        .filter(|c| !is_deceptive_char(*c))
         .map(|c| match c {
             '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
             c if (c as u32) < 0x20 => '_',
@@ -39,6 +48,21 @@ fn sanitize_file_stem(name: &str) -> String {
         stem = "tag".into();
     }
 
+    stem
+}
+
+/// Sanitize `name` into a file stem that has not been handed out before,
+/// suffixing ` (n)` on collision. Distinct tag names can collide after
+/// sanitizing (e.g. "a/b" and "a:b" both become "a_b"), and one export must
+/// never silently overwrite another.
+pub(crate) fn unique_file_stem(name: &str, used: &mut HashSet<String>) -> String {
+    let base = sanitize_file_stem(name);
+    let mut stem = base.clone();
+    let mut counter = 1;
+    while !used.insert(stem.clone()) {
+        stem = format!("{base} ({counter})");
+        counter += 1;
+    }
     stem
 }
 
@@ -66,6 +90,42 @@ pub(crate) fn save_version(save: &Save) -> Option<i32> {
     }
 }
 
+/// Open and parse a save (or `.r2tag`, which is a full save) from disk.
+pub(crate) fn read_save(path: &str) -> Result<Save, String> {
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut reader = BufReader::new(file);
+    Save::read(&mut reader).map_err(|e| e.to_string())
+}
+
+/// Custom tag names in a save, or `None` when `SavedPlayerTags` is missing or
+/// isn't a struct array — i.e. this parsed as a save but isn't a tag save.
+pub(crate) fn custom_tag_names(save: &Save) -> Option<Vec<String>> {
+    let tag_structs = match save.root.properties.0.get(&PropertyKey::from("SavedPlayerTags")) {
+        Some(Property::Array(ValueVec::Struct(structs))) => structs,
+        _ => return None,
+    };
+
+    Some(
+        tag_structs
+            .iter()
+            .filter_map(|sv| tag_name_of(sv))
+            .filter(|name| is_custom_tag(name))
+            .map(|name| name.to_string())
+            .collect(),
+    )
+}
+
+/// First tag name in a save, whether custom or built-in. A `.r2tag` holds
+/// exactly one tag, so this identifies it.
+pub(crate) fn first_tag_name(save: &Save) -> Option<&str> {
+    match save.root.properties.0.get(&PropertyKey::from("SavedPlayerTags")) {
+        Some(Property::Array(ValueVec::Struct(structs))) => {
+            structs.iter().find_map(|sv| tag_name_of(sv))
+        }
+        _ => None,
+    }
+}
+
 /// Build the exact single-tag save payload used by both local export and cloud
 /// upload. This only reads the source save and never writes it.
 pub(crate) fn single_tag_bytes(
@@ -76,9 +136,7 @@ pub(crate) fn single_tag_bytes(
         return Err("Built-in player tags cannot be exported".into());
     }
 
-    let file = File::open(save_path).map_err(|e| e.to_string())?;
-    let mut reader = BufReader::new(file);
-    let mut save = Save::read(&mut reader).map_err(|e| e.to_string())?;
+    let mut save = read_save(save_path)?;
     let version = save_version(&save);
 
     let tag_structs = match &mut save.root.properties["SavedPlayerTags"] {
@@ -98,26 +156,8 @@ pub(crate) fn single_tag_bytes(
 #[tauri::command]
 pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let file = File::open(&save_path).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(file);
-        let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-        let tag_structs = match &save.root.properties["SavedPlayerTags"] {
-            Property::Array(ValueVec::Struct(structs)) => structs,
-            Property::Array(_) => {
-                return Err("SavedPlayerTags array does not contain structs".into())
-            }
-            _ => return Err("SavedPlayerTags is not an array".into()),
-        };
-
-        let tag_names = tag_structs
-            .iter()
-            .filter_map(|sv| tag_name_of(sv))
-            .filter(|name| is_custom_tag(name))
-            .map(|name| name.to_string())
-            .collect();
-
-        Ok(tag_names)
+        custom_tag_names(&read_save(&save_path)?)
+            .ok_or_else(|| "SavedPlayerTags is missing or is not a struct array".to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -133,21 +173,12 @@ pub async fn export_tags(
 ) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let mut written = Vec::new();
-        let mut used_stems = std::collections::HashSet::new();
+        let mut used_stems = HashSet::new();
 
         for tag_name in &tag_names {
             let (bytes, _) = single_tag_bytes(&save_path, tag_name)?;
 
-            // Distinct tag names can collide after sanitizing (e.g. "a/b" and "a:b");
-            // suffix a counter so one export doesn't overwrite another.
-            let base_stem = sanitize_file_stem(tag_name);
-            let mut stem = base_stem.clone();
-            let mut counter = 1;
-            while !used_stems.insert(stem.clone()) {
-                stem = format!("{base_stem} ({counter})");
-                counter += 1;
-            }
-
+            let stem = unique_file_stem(tag_name, &mut used_stems);
             let out_path = std::path::Path::new(&output_dir).join(format!("{stem}.r2tag"));
             std::fs::write(&out_path, bytes).map_err(|e| e.to_string())?;
             written.push(out_path.to_string_lossy().to_string());
@@ -167,6 +198,9 @@ pub struct TagPreview {
     pub version: Option<i32>,
     /// True only when the .r2tag's version matches the loaded save's version.
     pub compatible: bool,
+    /// Why this entry can't be imported, when the file itself was unreadable.
+    /// Set per entry so one bad file in a 40-tag pack doesn't sink the batch.
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -184,36 +218,43 @@ pub async fn get_tag_previews(
     save_path: String,
 ) -> Result<PreviewResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let dest_file = File::open(&save_path).map_err(|e| e.to_string())?;
-        let mut dest_reader = BufReader::new(dest_file);
-        let dest = Save::read(&mut dest_reader).map_err(|e| e.to_string())?;
+        let dest = read_save(&save_path)?;
         let dest_version = save_version(&dest);
 
         let mut previews = Vec::new();
 
         for path in r2tag_paths {
-            let file = File::open(&path).map_err(|e| e.to_string())?;
-            let mut reader = BufReader::new(file);
-            let save = Save::read(&mut reader).map_err(|e| e.to_string())?;
-
-            let version = save_version(&save);
-
-            let tag_structs = match &save.root.properties["SavedPlayerTags"] {
-                Property::Array(ValueVec::Struct(structs)) => structs,
-                _ => return Err(format!("{path}: unexpected SavedPlayerTags format")),
+            // A single corrupt or truncated file becomes one unimportable row
+            // rather than an error that discards the whole batch.
+            let preview = match read_save(&path) {
+                Err(error) => TagPreview {
+                    tag_name: file_stem_of(&path),
+                    path,
+                    version: None,
+                    compatible: false,
+                    error: Some(error),
+                },
+                Ok(save) => match first_tag_name(&save) {
+                    None => TagPreview {
+                        tag_name: file_stem_of(&path),
+                        path,
+                        version: None,
+                        compatible: false,
+                        error: Some("No player tag found in this file".into()),
+                    },
+                    Some(name) => {
+                        let version = save_version(&save);
+                        TagPreview {
+                            path,
+                            tag_name: name.to_string(),
+                            version,
+                            compatible: version.is_some() && version == dest_version,
+                            error: None,
+                        }
+                    }
+                },
             };
-
-            let name = tag_structs
-                .iter()
-                .find_map(|sv| tag_name_of(sv))
-                .ok_or_else(|| format!("{path}: no tag name found"))?;
-
-            previews.push(TagPreview {
-                path,
-                tag_name: name.to_string(),
-                version,
-                compatible: version.is_some() && version == dest_version,
-            });
+            previews.push(preview);
         }
 
         Ok(PreviewResult {
@@ -223,6 +264,14 @@ pub async fn get_tag_previews(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Fallback label for a file we couldn't read a tag name out of.
+fn file_stem_of(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string())
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -249,9 +298,7 @@ pub async fn import_tags(
     instructions: Vec<ImportInstruction>,
 ) -> Result<ImportResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let file = File::open(&save_path).map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(file);
-        let mut dest = Save::read(&mut reader).map_err(|e| e.to_string())?;
+        let mut dest = read_save(&save_path)?;
         let dest_version = save_version(&dest);
 
         let mut imported = Vec::new();
@@ -275,9 +322,7 @@ pub async fn import_tags(
                     continue;
                 }
 
-                let r2tag_file = File::open(&instruction.path).map_err(|e| e.to_string())?;
-                let mut r2tag_reader = BufReader::new(r2tag_file);
-                let r2tag_save = Save::read(&mut r2tag_reader).map_err(|e| e.to_string())?;
+                let r2tag_save = read_save(&instruction.path)?;
 
                 // Reject cross-version imports: a tag from a different save format
                 // can't be written into this save (or would lose/garble settings).
@@ -313,9 +358,28 @@ pub async fn import_tags(
             }
         }
 
-        let out = File::create(&save_path).map_err(|e| e.to_string())?;
-        dest.write(&mut std::io::BufWriter::new(out))
-            .map_err(|e| e.to_string())?;
+        // Serialize into a sibling temp file and rename over the original, so a
+        // failure part-way through (disk full, antivirus, the game holding the
+        // handle) leaves the existing save untouched instead of truncated.
+        // `fs::rename` replaces the destination on both Windows and Unix.
+        let temp_path = std::path::Path::new(&save_path).with_extension("sav.tmp");
+        let write_result = (|| -> Result<(), String> {
+            let out = File::create(&temp_path).map_err(|e| e.to_string())?;
+            let mut writer = std::io::BufWriter::new(out);
+            dest.write(&mut writer).map_err(|e| e.to_string())?;
+            // Surface a failed flush rather than letting BufWriter swallow it on drop.
+            writer.into_inner().map_err(|e| e.to_string())?;
+            Ok(())
+        })();
+
+        if let Err(error) = write_result {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(error);
+        }
+        if let Err(error) = std::fs::rename(&temp_path, &save_path) {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(error.to_string());
+        }
 
         Ok(ImportResult {
             imported,
@@ -329,7 +393,25 @@ pub async fn import_tags(
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_file_stem;
+    use super::{sanitize_file_stem, unique_file_stem};
+    use std::collections::HashSet;
+
+    #[test]
+    fn distinct_names_that_sanitize_alike_get_unique_stems() {
+        let mut used = HashSet::new();
+        assert_eq!(unique_file_stem("a/b", &mut used), "a_b");
+        assert_eq!(unique_file_stem("a:b", &mut used), "a_b (1)");
+        assert_eq!(unique_file_stem("a*b", &mut used), "a_b (2)");
+        assert_eq!(unique_file_stem("other", &mut used), "other");
+    }
+
+    #[test]
+    fn strips_bidi_and_zero_width_characters() {
+        // U+202E would otherwise make "evil<RLO>gnp.r2tag" display as an image.
+        assert_eq!(sanitize_file_stem("evil\u{202E}gnp"), "evilgnp");
+        assert_eq!(sanitize_file_stem("a\u{200B}b"), "ab");
+        assert_eq!(sanitize_file_stem("\u{202E}"), "tag");
+    }
 
     #[test]
     fn replaces_path_separators_and_reserved_chars() {

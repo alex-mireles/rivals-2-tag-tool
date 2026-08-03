@@ -1,4 +1,5 @@
 mod commands;
+mod settings;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -6,11 +7,15 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            commands::get_default_save_path,
+            commands::save_file::resolve_save_file,
+            commands::save_file::set_save_path,
             commands::tags::get_tag_names,
             commands::tags::export_tags,
             commands::tags::get_tag_previews,
             commands::tags::import_tags,
+            commands::archive::pack_tags_from_save,
+            commands::archive::pack_tag_files,
+            commands::archive::unpack_r2pack,
             commands::cloud::cloud_begin_auth,
             commands::cloud::cloud_poll_auth,
             commands::cloud::cloud_end_session,

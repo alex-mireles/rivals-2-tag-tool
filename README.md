@@ -18,14 +18,24 @@ and Windows 11. If it is missing from your system, install the
 
 ## Usage
 
-**Players (at home):**
-Export your custom player tag and controls to a `.r2tag` file, then send it to your tournament organizers.
+Your save file is found and loaded automatically on startup — no file picker. If your save lives somewhere unusual, point the app at it once and it remembers.
 
-**Tournament Organizers:**
-Gather all of your entrants' `.r2tag` files, and import them directly onto your setups!
+There are two screens.
 
-**Cloud sharing:**
-Sign in with start.gg to publish one canonical tag, or search for an exact player/tournament and import every available uploaded tag. Cloud files are gzip-compressed before upload and are still checked locally before the game save is modified.
+**Get Tags** — bring tags onto this PC:
+
+- **Find Player** — look up an exact gamer tag or start.gg profile.
+- **Find Tournament** — scan a bracket and grab every entrant who has uploaded a tag.
+- **From Files** — import `.r2tag` files or a `.r2pack` archive. Works with no internet.
+
+**Share Tags** — send your tags out:
+
+- **Publish to Cloud** — sign in with start.gg and publish one canonical tag. This is the easiest way to have your tag waiting for you at every setup.
+- **Export to Files** — write `.r2tag` files to a folder, or bundle them into a single `.r2pack`.
+
+**Tournament Organizers:** scan your bracket under **Find Tournament**, hit **Save as .r2pack**, and put the file on a USB stick. On each setup: **Get Tags → From Files → pick the pack → Import**. You only need internet on the machine that builds the pack, so the setups themselves can stay offline.
+
+Cloud files are gzip-compressed before upload and are checked against their hash locally before the game save is modified.
 
 ## Contributing / Development Setup
 
@@ -64,7 +74,7 @@ On Windows:
 %LOCALAPPDATA%\Rivals2\Saved\SaveGames\Rivals2_PlayerTagSaveSlot.sav
 ```
 
-Use **Choose a Save File** to browse to it.
+The app looks there automatically at startup. If it isn't found — or your save lives elsewhere — use the **⋯** button on the path bar to browse to it. Your choice is remembered between launches; the **⟳** button next to it re-reads the file.
 
 **The Windows SmartScreen warning came up with "Windows protected your PC." Is that bad?**
 
@@ -80,11 +90,15 @@ xattr -d com.apple.quarantine "/Applications/Rivals II Tag Tool.app"
 
 **Does the tool work on macOS even though Rivals II isn't on Mac?**
 
-Yes. Rivals of Aether II does not natively support macOS, so there's no default save location to look for, but the tool itself runs natively on Mac. As long as you have a valid `Rivals2_PlayerTagSaveSlot.sav` to point it at, you can import and export tags as usual via **Choose a Save File**.
+Yes. Rivals of Aether II does not natively support macOS, so there's no default save location to look for, but the tool itself runs natively on Mac. As long as you have a valid `Rivals2_PlayerTagSaveSlot.sav` to point it at, you can import and export tags as usual.
+
+**Can I use the tool on a PC that doesn't have Rivals II installed?**
+
+Partly, and deliberately so. With no save file present you can still search the cloud and **Save as .r2pack** — that's the tournament organizer workflow, where the laptop building the pack isn't one of the setups. Importing, exporting, and publishing need a save file, and the app tells you which ones are unavailable.
 
 **Does this modify my save file?**
 
-Only when importing. Exporting just reads your save and writes standalone `.r2tag` files. Importing rewrites the save file to add (or overwrite) tags, so consider making a copy of the `.sav` first if you want a backup.
+Only when importing. Exporting, packing, and publishing just read your save. Importing writes the updated save to a temporary file and then swaps it in, so an interrupted import (full disk, antivirus, the game holding the file) leaves your original untouched rather than truncated. Making your own backup of the `.sav` is still never a bad idea.
 
 **Can Rivals II stay open while importing/exporting tags?**
 
@@ -93,6 +107,12 @@ Yes... but you should almost certainly close it. Rivals II does not reread from 
 **What exactly is in a `.r2tag` file?**
 
 It's a custom file containing a single player tag: the tag name and its custom control settings. Nothing else from your save (or your system) is included, so they're safe to share.
+
+**What's a `.r2pack`?**
+
+A bundle of many `.r2tag` files in one file, plus a small manifest recording where the pack came from and which save version it targets. It's a zip underneath, so you can rename it to `.zip` and look inside. Packs are meant for carrying a whole bracket's tags between setups on a USB stick.
+
+Note that a `.r2pack` is an offline copy: if someone later deletes their published cloud tag, packs already saved elsewhere still contain it.
 
 **What happens if an imported tag already exists on the setup?**
 

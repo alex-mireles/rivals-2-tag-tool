@@ -2,26 +2,25 @@
 import { onMounted, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import LoadView from './views/LoadView.vue';
-import ExportView from './views/ExportView.vue';
-import ImportView from './views/ImportView.vue';
-import CloudView from './views/CloudView.vue';
-import type { SaveFileState } from './types';
+import HomeView from './views/HomeView.vue';
+import GetTagsView from './views/GetTagsView.vue';
+import ShareTagsView from './views/ShareTagsView.vue';
+import { useSaveFile } from './composables/useSaveFile';
 
 const appWindow = getCurrentWindow();
 
-type ViewName = 'load' | 'export' | 'import' | 'cloud';
+type ViewName = 'home' | 'get' | 'share';
 
-const currentView = ref<ViewName>('load');
+const currentView = ref<ViewName>('home');
 const transitionName = ref('slide-forward');
 
-onMounted(() => { void invoke('cleanup_stale_cloud_files').catch(() => undefined); });
+const save = useSaveFile();
 
-const saveFileState = ref<SaveFileState>({
-  savePath: '',
-  savePathError: false,
-  tagNames: [],
-  hasLoaded: false,
+onMounted(() => {
+  // Resolve and read the save up front — the user shouldn't have to point the
+  // app at a file that lives in a fixed, known location.
+  void save.reload();
+  void invoke('cleanup_stale_cloud_files').catch(() => undefined);
 });
 
 function navigateTo(view: ViewName) {
@@ -31,11 +30,7 @@ function navigateTo(view: ViewName) {
 
 function goBack() {
   transitionName.value = 'slide-back';
-  currentView.value = 'load';
-}
-
-function updateTagNames(names: string[]) {
-  saveFileState.value = { ...saveFileState.value, tagNames: names, hasLoaded: true };
+  currentView.value = 'home';
 }
 </script>
 
@@ -44,9 +39,7 @@ function updateTagNames(names: string[]) {
     <div data-tauri-drag-region></div>
     <div class="controls">
       <button @click="appWindow.close()">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24">
-          <path fill="currentColor" d="M13.46 12L19 17.54V19h-1.46L12 13.46L6.46 19H5v-1.46L10.54 12L5 6.46V5h1.46L12 10.54L17.54 5H19v1.46z"/>
-        </svg>
+        <v-icon name="md-close-round" scale="0.85" />
       </button>
     </div>
   </div>
@@ -58,36 +51,9 @@ function updateTagNames(names: string[]) {
 
   <div class="viewport">
     <Transition :name="transitionName" mode="out-in">
-      <LoadView
-        v-if="currentView === 'load'"
-        key="load"
-        :initial-state="saveFileState"
-        @state-change="(s: SaveFileState) => (saveFileState = s)"
-        @navigate="navigateTo"
-      />
-      <ExportView
-        v-else-if="currentView === 'export'"
-        key="export"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-      />
-      <ImportView
-        v-else-if="currentView === 'import'"
-        key="import"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-        @tags-changed="updateTagNames"
-      />
-      <CloudView
-        v-else
-        key="cloud"
-        :save-path="saveFileState.savePath"
-        :tag-names="saveFileState.tagNames"
-        @go-back="goBack"
-        @tags-changed="updateTagNames"
-      />
+      <HomeView v-if="currentView === 'home'" key="home" @navigate="navigateTo" />
+      <GetTagsView v-else-if="currentView === 'get'" key="get" @go-back="goBack" />
+      <ShareTagsView v-else key="share" @go-back="goBack" />
     </Transition>
   </div>
 </template>
