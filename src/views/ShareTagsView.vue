@@ -363,11 +363,15 @@ async function exportSelected() {
           :tag-names="save.tagNames.value"
         />
 
+        <!-- Both destinations carry the same tags, so the choice is really
+             about how they travel. The tooltips say that, rather than
+             restating the file extension already on the button. -->
         <div class="target-row">
           <span class="target-label">Save as</span>
           <button
             class="target-btn"
             :class="{ active: exportTarget === 'folder' }"
+            data-tooltip="One .r2tag file per tag, written into a folder you pick. Best for handing someone a single tag — over Discord, email, or a shared drive."
             @click="exportTarget = 'folder'"
           >
             <v-icon name="md-folder-round" scale="0.75" />
@@ -376,6 +380,8 @@ async function exportSelected() {
           <button
             class="target-btn"
             :class="{ active: exportTarget === 'pack' }"
+            data-tooltip="All selected tags bundled into one .r2pack file. Built for tournaments: carry it on a USB stick and import the whole set onto each setup in one go."
+            data-tooltip-align="end"
             @click="exportTarget = 'pack'"
           >
             <v-icon name="md-archive-round" scale="0.75" />

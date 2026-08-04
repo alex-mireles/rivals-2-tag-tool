@@ -273,6 +273,16 @@ button:focus-visible {
 [data-tooltip] {
   position: relative;
 
+  // The `z-index` below only orders the tooltip *within* its host: a hover
+  // `transform` (`.btn`, `.target-btn`) makes that host a stacking context and
+  // traps it there, letting a later sibling paint over the tooltip — and since
+  // the buttons are translucent, that reads as a washed-out tooltip rather than
+  // an occluded one. Lifting the host itself is what clears it.
+  &:hover,
+  &:focus-visible {
+    z-index: 5;
+  }
+
   &::after {
     content: attr(data-tooltip);
     position: absolute;
@@ -313,6 +323,33 @@ button:focus-visible {
   &[data-tooltip-align='end']::after {
     left: auto;
     right: 0;
+  }
+
+  // For a host mid-line rather than at an edge — a term inside a centred
+  // sentence — where anchoring to either of its edges throws the whole width
+  // out one side of the card. `translate` rather than `transform`, so it
+  // composes with the fade-in instead of overwriting it.
+  &[data-tooltip-align='center']::after {
+    left: 50%;
+    right: auto;
+    translate: -50%;
+  }
+
+  // For a host on the last row, flip the tooltip above it: `.card-content`
+  // scrolls, so anything hanging past the final element grows the scroll area
+  // and spawns a scrollbar instead of floating over the card. Overflow above
+  // the top edge is never scrollable, so this direction is always free.
+  // The pair is deliberate — the first rule ties with the base `:hover`
+  // transform on specificity, so the flipped state needs its own.
+  &[data-tooltip-side='top']::after {
+    top: auto;
+    bottom: calc(100% + 0.4rem);
+    transform: translateY(0.15rem);
+  }
+
+  &[data-tooltip-side='top']:hover::after,
+  &[data-tooltip-side='top']:focus-visible::after {
+    transform: none;
   }
 }
 

@@ -356,9 +356,16 @@ onBeforeUnmount(() => {
               <v-icon name="md-download-round" scale="0.85" />
               Import {{ search.selected.value.size }} Tag{{ search.selected.value.size === 1 ? '' : 's' }}
             </button>
+            <!-- The one action on this screen that needs no save file, so the
+                 tooltip leads with why you'd pick it over Import. It opens
+                 upward: this row is the bottom of a card the results list has
+                 usually already filled. -->
             <button
               class="btn btn-primary btn-primary-muted"
               :disabled="!search.selected.value.size"
+              data-tooltip="Bundle the selected tags into one .r2pack file instead of importing them here. Carry it on a USB stick and import the whole set onto each setup, no internet needed."
+              data-tooltip-align="end"
+              data-tooltip-side="top"
               @click="savePack"
             >
               <v-icon name="md-archive-round" scale="0.85" />
@@ -376,8 +383,24 @@ onBeforeUnmount(() => {
             <v-icon name="md-fileopen-round" scale="0.85" />
             Choose Tag Files
           </button>
+          <!-- Two formats land in the same picker, so each one explains itself
+               on hover. Both sit mid-line in a centred sentence on the card's
+               last row, so both open upward and centre on the term: anchored to
+               an edge instead, either one runs off the side of the card. -->
           <p class="hint hint--center">
-            Pick <code>.r2tag</code> files, or a <code>.r2pack</code> from a tournament.
+            Pick
+            <code
+              data-tooltip="One player's tag and control settings, in a single file."
+              data-tooltip-align="center"
+              data-tooltip-side="top"
+            >.r2tag</code>
+            files, or a
+            <code
+              data-tooltip="A bundle of many .r2tag files in one archive, usually made from a tournament bracket. Import them all at once."
+              data-tooltip-align="center"
+              data-tooltip-side="top"
+            >.r2pack</code>
+            from a tournament.
           </p>
         </template>
       </div>
@@ -438,6 +461,16 @@ onBeforeUnmount(() => {
 
   &--center {
     text-align: center;
+  }
+
+  // A hoverable definition needs to look hoverable: the dotted underline is
+  // what says the tooltip is there at all.
+  code {
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
+    font-size: 0.95em;
+    color: var(--text-primary);
+    border-bottom: 1px dotted var(--text-muted);
+    cursor: help;
   }
 }
 

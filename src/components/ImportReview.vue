@@ -109,7 +109,7 @@ async function doImport() {
           class="save-version"
           :data-tooltip="`Your save file is version ${saveVersion}. A tag can only be imported if it was saved under the same version.`"
         >
-          Save v{{ saveVersion }}
+          Tag Save File v{{ saveVersion }}
         </span>
         <button v-if="conflictNames.size" class="panel-btn" @click="toggleAllConflicts">
           <v-icon name="md-doneall-round" scale="0.7" />
@@ -204,7 +204,10 @@ async function doImport() {
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   white-space: nowrap;
-  border-bottom: 1px dotted var(--line);
+  // `currentColor`, not `--line`: at 8% white the underline was invisible, so
+  // the only thing advertising the tooltip was a cursor you had to already be
+  // hovering to see. Following the text also means it brightens on hover.
+  border-bottom: 1px dotted currentColor;
   cursor: help;
 
   &:hover { color: var(--text-primary); }
