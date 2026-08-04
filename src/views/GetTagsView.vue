@@ -9,6 +9,7 @@ import ImportReview from '../components/ImportReview.vue';
 import SaveStatusNotice from '../components/SaveStatusNotice.vue';
 import TabBar from '../components/TabBar.vue';
 import ViewHeader from '../components/ViewHeader.vue';
+import startggIcon from '../assets/startgg.svg';
 import { apiBaseUrl, cloudConfigured, CLOUD_UNCONFIGURED_MESSAGE } from '../cloud';
 import { useCloudSearch } from '../composables/useCloudSearch';
 import { useSaveFile } from '../composables/useSaveFile';
@@ -28,9 +29,24 @@ import type { CloudDownload, PackSummary, PreviewResult, TagPreview, UnpackResul
 
 type TabName = 'player' | 'tournament' | 'files';
 
+// Rotated through the search box: most users have never heard the word "slug",
+// but they recognise the shapes. Ordered most- to least-common form of input.
+// A bare word is looked up as a gamer tag, not a user slug — keep that first.
+const PLAYER_EXAMPLES = [
+  'HyperFlame',
+  'https://www.start.gg/user/8ada046a',
+  'user/8ada046a',
+] as const;
+
+const TOURNAMENT_EXAMPLES = [
+  'https://start.gg/tournament/supernova-2026',
+  'start.gg/tournament/genesis-x3',
+  'evo-2026',
+] as const;
+
 const TABS = [
-  { id: 'player', label: 'Find Player', icon: 'md-personsearch-round' },
-  { id: 'tournament', label: 'Find Tournament', icon: 'md-emojievents-round' },
+  { id: 'player', label: 'Search Player', icon: 'md-personsearch-round' },
+  { id: 'tournament', label: 'Search Tournament', icon: 'md-emojievents-round' },
   { id: 'files', label: 'From Files', icon: 'md-folder-round' },
 ] as const satisfies readonly { id: TabName; label: string; icon: string }[];
 
@@ -257,9 +273,28 @@ onBeforeUnmount(() => {
       <TabBar :tabs="TABS" :model-value="tab" @update:model-value="switchTab" />
 
       <div v-if="isCloudTab" class="view-stack">
+        <!-- start.gg is the only way in here — say so rather than implying it.
+             The coverage caveat is a footnote below the search box instead: it
+             applies to both tabs and answers "why isn't my friend here?", which
+             is a question users only have *after* searching. -->
+        <div class="cloud-notice">
+          <img :src="startggIcon" alt="" class="cloud-notice-icon" />
+          <p v-if="tab === 'player'" class="cloud-notice-text">
+            Search the tag database with an exact <strong>start.gg</strong> username or profile URL.
+          </p>
+          <p v-else class="cloud-notice-text">
+            Scan a <strong>start.gg</strong> tournament for entrants with tags in the database.
+          </p>
+        </div>
+
         <CloudSearchPanel
           v-model:query="search.query.value"
-          :placeholder="tab === 'player' ? 'Exact gamer tag or profile URL' : 'Tournament URL or slug'"
+          :placeholder="
+            tab === 'player'
+              ? 'start.gg username or profile URL'
+              : 'start.gg tournament URL'
+          "
+          :examples="tab === 'player' ? PLAYER_EXAMPLES : TOURNAMENT_EXAMPLES"
           :results="search.results.value"
           :selected="search.selected.value"
           :all-selected="search.allSelected.value"
@@ -269,6 +304,10 @@ onBeforeUnmount(() => {
           @toggle="search.toggleSelected"
           @toggle-all="search.toggleAll"
         />
+
+        <p class="footnote">
+          Only players who published their tag with this app will show up.
+        </p>
 
         <p v-if="search.progress.value" class="hint">{{ search.progress.value }}</p>
 
@@ -356,14 +395,52 @@ onBeforeUnmount(() => {
 
   .btn {
     flex: 1;
-    font-size: 0.82em;
+    font-size: 0.9em;
   }
+}
+
+.cloud-notice {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.85rem;
+  background: var(--surface-inset);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-panel);
+
+  &-icon {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+  }
+
+  &-text {
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+
+    strong {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+  }
+}
+
+.footnote {
+  width: 100%;
+  margin-top: -0.15rem;
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .hint {
   width: 100%;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
 
   &--center {
     text-align: center;
@@ -372,7 +449,7 @@ onBeforeUnmount(() => {
 
 .banner {
   width: 100%;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: var(--text-muted);
 
   &--warn {

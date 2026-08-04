@@ -1,8 +1,15 @@
 <script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { CloudTagMetadata } from '../types';
 
-defineProps<{
+/**
+ * `examples` replaces the static placeholder with a fading rotation of concrete
+ * inputs — "slug" means nothing to most players, but `start.gg/user/a1b2c3d4`
+ * does. The rotation is an overlay because `::placeholder` can't be animated.
+ */
+const props = defineProps<{
   placeholder: string;
+  examples?: readonly string[];
   results: CloudTagMetadata[];
   selected: Set<string>;
   allSelected: boolean;
@@ -13,16 +20,45 @@ defineProps<{
 const query = defineModel<string>('query', { required: true });
 
 defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
+
+// The out-in swap leaves the field briefly empty, so keep the fades short
+// relative to the hold — a long blank gap reads as flicker.
+const EXAMPLE_INTERVAL_MS = 3600;
+
+const index = ref(0);
+const examples = computed(() => props.examples ?? []);
+const showExamples = computed(() => examples.value.length > 0 && !query.value);
+const currentExample = computed(() => examples.value[index.value] ?? '');
+
+// Tab switches swap the example set out from under us; restart at the top so
+// the first thing the user sees is the most common form of input.
+watch(examples, () => {
+  index.value = 0;
+});
+
+const timer = setInterval(() => {
+  if (!showExamples.value) return;
+  index.value = (index.value + 1) % examples.value.length;
+}, EXAMPLE_INTERVAL_MS);
+
+onBeforeUnmount(() => clearInterval(timer));
 </script>
 
 <template>
   <div class="search-row">
-    <input
-      v-model="query"
-      :placeholder="placeholder"
-      :disabled="isWorking"
-      @keyup.enter="$emit('search')"
-    />
+    <div class="search-field">
+      <input
+        v-model="query"
+        :placeholder="showExamples ? '' : placeholder"
+        :disabled="isWorking"
+        @keyup.enter="$emit('search')"
+      />
+      <Transition name="example" mode="out-in">
+        <span v-if="showExamples" :key="currentExample" class="search-example">
+          e.g. {{ currentExample }}
+        </span>
+      </Transition>
+    </div>
     <button
       class="btn btn-primary"
       :disabled="isWorking || !query.trim() || disabled"
@@ -36,7 +72,7 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
   <div v-if="results.length" class="tag-panel">
     <div class="tag-panel-header">
       <span class="tag-panel-label">Available Tags</span>
-      <button class="small-btn" @click="$emit('toggle-all')">
+      <button class="panel-btn" @click="$emit('toggle-all')">
         <v-icon name="md-doneall-round" scale="0.7" />
         {{ allSelected ? 'Deselect All' : 'Select All' }}
       </button>
@@ -65,21 +101,69 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
 .search-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 1fr 7rem;
+  grid-template-columns: 1fr 8rem;
   gap: 0.5rem;
 
   input {
+    width: 100%;
     min-width: 0;
-    padding: 0.65rem;
+    padding: 0.75rem;
     color: var(--text-primary);
     background: var(--surface-inset);
     border: 1px solid var(--line);
     border-radius: 0.4rem;
     font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 500;
 
     &:disabled {
       opacity: 0.5;
     }
+  }
+}
+
+.search-field {
+  position: relative;
+  min-width: 0;
+}
+
+// Sits exactly where the native placeholder would, so the swap between the two
+// (examples vs. plain placeholder) is invisible.
+.search-example {
+  position: absolute;
+  inset: 1px; // clear the input's border, so the text lines up with typed text
+  padding: 0.75rem;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.example-enter-active,
+.example-leave-active {
+  transition: opacity 250ms ease, transform 250ms ease;
+}
+
+.example-enter-from,
+.example-leave-to {
+  opacity: 0;
+  transform: translateY(0.35rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .example-enter-active,
+  .example-leave-active {
+    transition: none;
+  }
+
+  .example-enter-from,
+  .example-leave-to {
+    transform: none;
   }
 }
 
@@ -100,10 +184,16 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
 
   &-version {
     flex-shrink: 0;
+    font-size: 0.78rem;
     color: var(--text-muted);
   }
 
+  strong {
+    font-size: 0.95rem;
+  }
+
   small {
+    font-size: 0.78rem;
     color: var(--text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -128,22 +218,4 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
   }
 }
 
-.small-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3em;
-  background: none;
-  border: 1px solid var(--line-subtle);
-  color: var(--text-muted);
-  font-size: 0.85em;
-  padding: 0.25em 0.6em;
-  border-radius: var(--radius-button);
-  cursor: pointer;
-  transition: color 500ms, border-color 500ms;
-
-  &:hover {
-    color: var(--text-primary);
-    border-color: var(--accent);
-  }
-}
 </style>

@@ -22,10 +22,6 @@ const result = ref<ImportResult | null>(null);
 const errorMsg = ref('');
 
 const compatiblePreviews = computed(() => props.previews.filter((preview) => preview.compatible));
-const unreadableCount = computed(() => props.previews.filter((preview) => preview.error).length);
-const incompatibleCount = computed(
-  () => props.previews.length - compatiblePreviews.value.length - unreadableCount.value,
-);
 const conflictNames = computed(() => new Set(
   compatiblePreviews.value.map((preview) => preview.tag_name).filter((name) => props.tagNames.includes(name)),
 ));
@@ -92,8 +88,18 @@ async function doImport() {
     <slot name="banner" />
     <div class="tag-panel">
       <div class="tag-panel-header">
-        <span class="tag-panel-label">Tags to Import <small v-if="saveVersion !== null">Save v{{ saveVersion }}</small></span>
-        <button v-if="conflictNames.size" class="small-btn" @click="toggleAllConflicts">
+        <span class="tag-panel-label">Tags to Import</span>
+        <!-- The version rule only matters when a tag breaks it, and a broken
+             tag already says so on its own row. So it sits here as a bare
+             fact, with the rule itself one hover away. -->
+        <span
+          v-if="saveVersion !== null"
+          class="save-version"
+          :data-tooltip="`Your save file is version ${saveVersion}. A tag can only be imported if it was saved under the same version.`"
+        >
+          Save v{{ saveVersion }}
+        </span>
+        <button v-if="conflictNames.size" class="panel-btn" @click="toggleAllConflicts">
           <v-icon name="md-doneall-round" scale="0.7" />
           {{ allOverwrite ? 'Skip All' : 'Overwrite All' }}
         </button>
@@ -103,7 +109,15 @@ async function doImport() {
           <div><strong>{{ preview.tag_name }}</strong><small>{{ preview.error ?? preview.path.split(/[\\/]/).pop() }}</small></div>
           <span v-if="preview.error" class="badge badge--error">Unreadable</span>
           <span v-else-if="!preview.compatible" class="badge badge--error">{{ preview.version === null ? 'Unknown version' : `v${preview.version}` }}</span>
-          <button v-else-if="conflictNames.has(preview.tag_name)" class="small-btn" @click="toggleOverwrite(preview.tag_name)">
+          <!-- Colour carries the outcome: yellow keeps the tag you already
+               have, red replaces it. Both are one click from the other, so the
+               label alone is easy to skim past. -->
+          <button
+            v-else-if="conflictNames.has(preview.tag_name)"
+            class="panel-btn conflict-btn"
+            :class="overwriteSet.has(preview.tag_name) ? 'conflict-btn--overwrite' : 'conflict-btn--skip'"
+            @click="toggleOverwrite(preview.tag_name)"
+          >
             <v-icon name="md-swaphoriz-round" scale="0.7" />
             {{ overwriteSet.has(preview.tag_name) ? 'Overwrite' : 'Skip' }}
           </button>
@@ -111,9 +125,12 @@ async function doImport() {
         </li>
       </ul>
     </div>
-    <p v-if="conflictNames.size" class="hint">Conflicts default to <strong>Skip</strong>.</p>
-    <p v-if="incompatibleCount" class="hint"><strong>{{ incompatibleCount }}</strong> tag(s) were saved under a different game version and cannot be imported.</p>
-    <p v-if="unreadableCount" class="hint"><strong>{{ unreadableCount }}</strong> file(s) could not be read and will be skipped.</p>
+    <!-- Sits directly under the Skip/Overwrite column it explains, close enough
+         to the panel to read as its caption rather than as another footnote. -->
+    <p v-if="conflictNames.size" class="hint hint--caption">
+      Conflicts default to <strong>Skip</strong>.
+    </p>
+
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
     <button class="btn btn-primary" :disabled="compatiblePreviews.length === 0" @click="doImport">
       <v-icon name="md-download-round" scale="0.85" />
@@ -127,9 +144,56 @@ async function doImport() {
 .review-row > div { min-width: 0; display: flex; flex-direction: column; }
 .review-row small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .incompatible { opacity: 0.55; }
-.small-btn { display: flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); background: var(--surface-hover); color: var(--text-primary); border-radius: 0.4rem; padding: 0.25rem 0.5rem; cursor: pointer; }
+// Shape comes from .panel-btn so it lines up with every other panel-header
+// control; only the colours are its own.
+.conflict-btn {
+  font-weight: 600;
+  transition: background 500ms, color 500ms, border-color 500ms;
+
+  &--skip {
+    border-color: rgba(250, 204, 21, 0.4);
+    color: var(--text-warning);
+
+    &:hover { border-color: rgba(250, 204, 21, 0.85); color: var(--text-warning); }
+  }
+
+  &--overwrite {
+    background: rgba(248, 113, 113, 0.15);
+    border-color: rgba(248, 113, 113, 0.5);
+    color: var(--text-failure);
+
+    &:hover { border-color: rgba(248, 113, 113, 0.9); color: var(--text-failure); }
+  }
+}
 .badge { color: var(--text-success); font-weight: 700; &--error { color: var(--text-failure); } }
-.hint { width: 100%; color: var(--text-muted); font-size: 0.78rem; }
+.hint {
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+
+  // Caption for the panel above rather than a footnote of its own: pulled up
+  // against the panel and aligned to the column it describes.
+  &--caption {
+    margin-top: -0.7rem;
+    padding-right: 0.15rem;
+    text-align: right;
+  }
+}
+// The header holds three things now, so it needs a gap and the version pushed
+// up against the title instead of drifting into the middle.
+.tag-panel-header { gap: 0.6rem; }
+.save-version {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  border-bottom: 1px dotted var(--line);
+  cursor: help;
+
+  &:hover { color: var(--text-primary); }
+}
 .result-panel { width: 100%; display: flex; flex-direction: column; gap: 0.6rem; }
 .result-section { padding: 0.75rem; border: 1px solid var(--line); border-radius: var(--radius-panel); background: var(--surface-inset); font-size: 0.8rem; &--success { border-color: rgba(0,255,170,.2); } }
 .result-section > span { color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; }

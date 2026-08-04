@@ -11,7 +11,23 @@ import type { CloudTagMetadata, CloudUser } from '../types';
  * drops the session and forces a browser round trip on every visit. The token
  * lives only here — never on disk, since this app is expected to run on shared
  * tournament PCs.
+ *
+ * Sign-in happens in the user's default browser, which we hand a URL to and
+ * then lose sight of: nothing tells us the page was closed, refused, or never
+ * loaded. So the in-flight state lives here too — `isSigningIn` outlives the
+ * view, and the wait is always cancellable rather than pretending we can
+ * detect an abandoned tab.
  */
+
+const POLL_INTERVAL_MS = 1500;
+
+/**
+ * Every way a sign-in can end without a session, from this side of the browser
+ * hand-off, is indistinguishable from any other: closed tab, denied consent,
+ * or a user who wandered off. Name the likeliest cause and offer the retry.
+ */
+const ABANDONED_MESSAGE =
+  'Sign-in was never completed — the start.gg page may have been closed. Try again.';
 
 interface AuthRequest {
   requestId: string;
@@ -29,36 +45,71 @@ interface PollResult {
 const sessionToken = ref('');
 const signedInUser = ref<CloudUser | null>(null);
 const publishedTag = ref<CloudTagMetadata | null>(null);
+const isSigningIn = ref(false);
+const signInStatus = ref('');
 
-async function signIn(onProgress: (message: string) => void): Promise<void> {
-  const request = await invoke<AuthRequest>('cloud_begin_auth', { apiBaseUrl });
-  await openUrl(request.authorizationUrl);
-  onProgress('Complete authentication in your browser…');
+let cancelled = false;
 
-  while (Date.now() / 1000 < request.expiresAt) {
-    await wait(1500);
-    const poll = await invoke<PollResult>('cloud_poll_auth', {
-      apiBaseUrl,
-      requestId: request.requestId,
-      pollToken: request.pollToken,
-    });
-    if (poll.status === 'complete' && poll.sessionToken && poll.user) {
-      sessionToken.value = poll.sessionToken;
-      signedInUser.value = poll.user;
-      const owned = await invoke<CloudTagMetadata[]>('cloud_search_tags', {
-        apiBaseUrl,
-        query: poll.user.slug,
-      });
-      publishedTag.value =
-        owned.find((tag) => tag.startggUserId === poll.user?.startggUserId) ?? null;
-      onProgress('');
-      return;
+/** Give up on the outstanding browser round trip. */
+function cancelSignIn() {
+  cancelled = true;
+}
+
+/**
+ * Returns `'cancelled'` when the user backed out; throws for anything that
+ * actually went wrong. The polling loop deliberately keeps running across
+ * navigation — someone who approves in the browser after wandering back to the
+ * home screen should still land signed in.
+ */
+async function signIn(): Promise<'signed-in' | 'cancelled'> {
+  cancelled = false;
+  isSigningIn.value = true;
+  signInStatus.value = 'Awaiting start.gg sign-in…';
+  try {
+    const request = await invoke<AuthRequest>('cloud_begin_auth', { apiBaseUrl });
+    await openUrl(request.authorizationUrl);
+
+    while (Date.now() / 1000 < request.expiresAt) {
+      await wait(POLL_INTERVAL_MS);
+      if (cancelled) return 'cancelled';
+
+      let poll: PollResult;
+      try {
+        poll = await invoke<PollResult>('cloud_poll_auth', {
+          apiBaseUrl,
+          requestId: request.requestId,
+          pollToken: request.pollToken,
+        });
+      } catch (error) {
+        // A 404 means the request record is gone: it aged out server-side, or
+        // was already consumed. Either way this attempt can never complete, so
+        // stop waiting instead of polling a dead id until our own deadline.
+        if (String(error).includes('Cloud API returned 404')) break;
+        throw error;
+      }
+
+      if (cancelled) return 'cancelled';
+      if (poll.status === 'complete' && poll.sessionToken && poll.user) {
+        sessionToken.value = poll.sessionToken;
+        signedInUser.value = poll.user;
+        const owned = await invoke<CloudTagMetadata[]>('cloud_search_tags', {
+          apiBaseUrl,
+          query: poll.user.slug,
+        });
+        publishedTag.value =
+          owned.find((tag) => tag.startggUserId === poll.user?.startggUserId) ?? null;
+        return 'signed-in';
+      }
     }
+    throw new Error(ABANDONED_MESSAGE);
+  } finally {
+    isSigningIn.value = false;
+    signInStatus.value = '';
   }
-  throw new Error('Authentication request expired.');
 }
 
 async function signOut() {
+  cancelSignIn();
   if (sessionToken.value) {
     await invoke('cloud_end_session', { apiBaseUrl, sessionToken: sessionToken.value }).catch(
       () => undefined,
@@ -70,5 +121,14 @@ async function signOut() {
 }
 
 export function useCloudAuth() {
-  return { sessionToken, signedInUser, publishedTag, signIn, signOut };
+  return {
+    sessionToken,
+    signedInUser,
+    publishedTag,
+    isSigningIn,
+    signInStatus,
+    signIn,
+    cancelSignIn,
+    signOut,
+  };
 }

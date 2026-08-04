@@ -33,18 +33,28 @@ const savePathStatus = computed(() => {
       <span class="app-version">v{{ appVersion }}</span>
     </div>
 
-    <SavePathBar :label="savePathDisplay" :status="savePathStatus">
+    <SavePathBar
+      :label="savePathDisplay"
+      :is-path="!!save.path.value && !isResolving"
+      :status="savePathStatus"
+    >
       <template #actions>
         <button
           class="path-action"
-          title="Reload tags from the save file"
+          data-tooltip="Choose a different save file"
+          data-tooltip-align="end"
+          @click="save.choose()"
+        >
+          <v-icon name="md-fileopen-round" scale="0.8" />
+        </button>
+        <button
+          class="path-action"
+          data-tooltip="Reload tags from the save file"
+          data-tooltip-align="end"
           :disabled="isResolving"
           @click="save.reload()"
         >
           <v-icon name="md-refresh-round" scale="0.8" />
-        </button>
-        <button class="path-action" title="Choose a different save file" @click="save.choose()">
-          <v-icon name="md-fileopen-round" scale="0.8" />
         </button>
       </template>
     </SavePathBar>

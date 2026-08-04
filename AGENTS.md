@@ -14,6 +14,19 @@ Tauri v2 desktop app (Windows/macOS) for sharing Rivals of Aether II player tags
 
 `pnpm build` requires `VITE_CLOUD_API_BASE_URL` in `process.env` (CI supplies it; `.env.local` only reaches `import.meta.env`, so a bare local `pnpm build` fails by design).
 
+## Viewing the UI
+
+**Never open `localhost:1420` in a browser, and never point a browser-preview tool at it.** Port 1420 is not a browsable build of this app — it exists solely for the Tauri window to load from. `App.vue` calls Tauri APIs during setup, so outside the Tauri webview it throws before anything renders (`Unhandled error during execution of setup function at <App>`) and you get a blank page. No amount of retrying, reloading, or reconfiguring changes that; there is no browser path to this UI.
+
+To see a change, look at the real window:
+
+- `pnpm tauri dev` runs it, and it hot-reloads on save — frontend edits need no rebuild.
+- Use computer use to screenshot and drive that window. Request access to `rivals-2-tag-tool.exe`; the grant resolves to `src-tauri/target/debug/rivals-2-tag-tool.exe`.
+- The Start-menu entry "Rivals II Tag Tool" is the *installed release build*, usually an older version — opening it by name gets you the wrong app. Check the version under the title to confirm which one you're looking at.
+- The card is vertically centred and animates its height, so it shifts between screens. Re-screenshot after every navigation instead of reusing coordinates.
+
+For anything the window can't show (computed styles, overflow measurements), read the source or reason about the CSS — don't reach for the browser.
+
 ## Architecture
 
 - Frontend: three views in `src/views/` — `HomeView` → `GetTagsView` / `ShareTagsView`. Each of the two leaf views puts the cloud path in its first, default tab and local files in the last.

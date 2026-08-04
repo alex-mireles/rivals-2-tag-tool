@@ -8,7 +8,7 @@ defineEmits<{
 
 <template>
   <div class="card-view-header">
-    <button class="back-btn" title="Back" @click="$emit('go-back')">
+    <button class="back-btn" data-tooltip="Back to the home screen" @click="$emit('go-back')">
       <v-icon name="md-arrowback-round" scale="1.1" />
     </button>
     <span class="card-view-header-title">{{ title }}</span>

@@ -55,6 +55,9 @@ function cancel() {
 
 function reset() {
   cancel();
+  // The query goes too: a player name is not a tournament, and leaving it
+  // behind when the search type changes only invites a nonsense search.
+  query.value = '';
   setResults([]);
   progress.value = '';
   tournamentName.value = '';
@@ -72,7 +75,7 @@ async function searchPlayer(): Promise<string> {
       await invoke<CloudTagMetadata[]>('cloud_search_tags', { apiBaseUrl, query: query.value }),
     );
     if (!results.value.length) {
-      progress.value = 'No published cloud tag matched that exact gamer tag or profile.';
+      progress.value = 'No published cloud tag matched that exact username or profile.';
     }
     return '';
   } catch (error) {

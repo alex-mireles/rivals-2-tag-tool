@@ -16,6 +16,51 @@ body {
   font-family: 'Inter Variable', sans-serif;
 }
 
+// WebView2 ships the Windows scrollbar — a light track with stepper buttons,
+// which is the one piece of chrome in the app that isn't ours. Restyled here
+// for every scroll container at once (.tag-list, .card-content, …).
+//
+// `::-webkit-scrollbar` is the controlling rule in both WebView2 and WKWebView;
+// the standard properties below are the fallback, and they can't coexist with
+// it — setting `scrollbar-width` suppresses the pseudo-elements — so they live
+// behind a support query for engines without the pseudo-elements.
+::-webkit-scrollbar {
+  width: 0.75rem;
+  height: 0.75rem;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+// The transparent border + padding-box clip is what insets the thumb from the
+// panel edge; a narrower scrollbar instead would shrink the grab target too.
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  background-clip: padding-box;
+  border: 0.2rem solid transparent;
+  border-radius: 0.4rem;
+  transition: background 200ms;
+
+  &:hover {
+    background: var(--scroll-thumb-hover);
+    background-clip: padding-box;
+  }
+}
+
+// Stepper arrows and the corner between two bars: neither has a place here.
+::-webkit-scrollbar-button,
+::-webkit-scrollbar-corner {
+  display: none;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) transparent;
+  }
+}
+
 .titlebar {
   height: 30px;
   user-select: none;
@@ -183,9 +228,15 @@ button:focus-visible {
   gap: 0.5em;
   cursor: pointer;
   border-radius: var(--radius-button);
-  padding: 0.7em;
-  border: none;
-  transition: background 500ms, transform 500ms;
+  padding: 0.6em 1em;
+  // Transparent rather than `none` so variants that add a visible border
+  // (.danger-btn) come out exactly the same height as the ones that don't.
+  border: 1px solid transparent;
+  // Size and weight live here, not on --primary: every variant is the same
+  // button, so a new one shouldn't have to restate them to match.
+  font-size: 1em;
+  font-weight: 600;
+  transition: background 500ms, border-color 500ms, transform 500ms;
 
   &:hover {
     transform: translateY(-0.2em);
@@ -194,8 +245,6 @@ button:focus-visible {
   &-primary {
     background: var(--accent);
     color: white;
-    font-size: 0.9em;
-    font-weight: 600;
 
     &:hover {
       background: var(--accent-hover);
@@ -210,6 +259,60 @@ button:focus-visible {
     opacity: 0.4;
     cursor: not-allowed;
     transform: none;
+  }
+}
+
+// Instant tooltips: `data-tooltip="…"` on any element, in place of `title`.
+// The native tooltip waits about a second before appearing, which is long
+// enough that an icon-only button reads as unlabelled to anyone who doesn't
+// already know what it does.
+//
+// Anchored to the element's left edge by default; add `data-tooltip-align="end"`
+// for controls near the right edge, since `.card` clips anything that overruns
+// it. Nothing here escapes the card on its own.
+[data-tooltip] {
+  position: relative;
+
+  &::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    z-index: 5;
+    width: max-content;
+    max-width: 22rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-button);
+    background: var(--surface-tooltip);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.35);
+    color: var(--text-primary);
+    font-family: 'Inter Variable', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 500;
+    font-style: normal;
+    line-height: 1.4;
+    letter-spacing: normal;
+    text-align: left;
+    text-transform: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    // The tooltip must never eat the hover it is describing.
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-0.15rem);
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    opacity: 1;
+    transform: none;
+  }
+
+  &[data-tooltip-align='end']::after {
+    left: auto;
+    right: 0;
   }
 }
 
@@ -270,7 +373,7 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   width: 100%;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   padding: 0.75rem 1rem 0.25rem;
   background: var(--surface-inset);
   border: 1px solid var(--line-subtle);
@@ -293,6 +396,31 @@ button:focus-visible {
     letter-spacing: 0.1em;
     font-weight: 400;
     color: var(--text-muted);
+  }
+}
+
+// The small secondary control that lives in a .tag-panel header — Select All,
+// Overwrite All, and the per-row conflict toggle. Global because every panel
+// that has one should look identical; this was three separate copies under two
+// names, which is exactly how the import review drifted out of step.
+.panel-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  background: none;
+  border: 1px solid var(--line-subtle);
+  color: var(--text-muted);
+  // Not `em`: .tag-panel already scales this subtree down, and a relative size
+  // here compounds into something unreadable.
+  font-size: 0.78rem;
+  padding: 0.3em 0.6em;
+  border-radius: var(--radius-button);
+  cursor: pointer;
+  transition: color 500ms, border-color 500ms;
+
+  &:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
   }
 }
 
@@ -331,6 +459,9 @@ button:focus-visible {
   --surface:        rgba(179, 179, 179, 0.10);
   --surface-hover:  rgba(255, 255, 255, 0.15);
   --surface-inset:  rgba(0, 0, 0, 0.28);
+  // Opaque on purpose: a tooltip floats over other text, and every other
+  // surface here is translucent enough to let that text show through it.
+  --surface-tooltip: #241f45;
 
   // Accent
   --accent:         rgba(99, 102, 241, 0.80);
@@ -343,6 +474,10 @@ button:focus-visible {
   --text-success:   #00ffaa;
   --text-warning:   #facc15;
   --text-failure:   #f87171;
+
+  // Scrollbars
+  --scroll-thumb:       rgba(255, 255, 255, 0.18);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.32);
 
   // Borders
   --line:           rgba(255, 255, 255, 0.08);

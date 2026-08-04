@@ -25,7 +25,7 @@ function toggleAll() {
   <div class="tag-panel">
     <div class="tag-panel-header">
       <span class="tag-panel-label">{{ label }}</span>
-      <button class="select-all-btn" @click="toggleAll">
+      <button class="panel-btn" @click="toggleAll">
         <v-icon name="md-doneall-round" scale="0.7" />
         {{ allSelected ? 'Deselect All' : 'Select All' }}
       </button>
@@ -47,25 +47,6 @@ function toggleAll() {
 </template>
 
 <style scoped lang="scss">
-.select-all-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3em;
-  background: none;
-  border: 1px solid var(--line-subtle);
-  color: var(--text-muted);
-  font-size: 0.85em;
-  padding: 0.25em 0.6em;
-  border-radius: var(--radius-button);
-  cursor: pointer;
-  transition: color 500ms, border-color 500ms;
-
-  &:hover {
-    color: var(--text-primary);
-    border-color: var(--accent);
-  }
-}
-
 .tag-row {
   gap: 0.75em;
 

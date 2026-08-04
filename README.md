@@ -24,7 +24,7 @@ There are two screens.
 
 **Get Tags** — bring tags onto this PC:
 
-- **Find Player** — look up an exact gamer tag or start.gg profile.
+- **Find Player** — look up an exact username or start.gg profile.
 - **Find Tournament** — scan a bracket and grab every entrant who has uploaded a tag.
 - **From Files** — import `.r2tag` files or a `.r2pack` archive. Works with no internet.
 
@@ -94,7 +94,7 @@ Yes. Rivals of Aether II does not natively support macOS, so there's no default 
 
 **Can I use the tool on a PC that doesn't have Rivals II installed?**
 
-Partly, and deliberately so. With no save file present you can still search the cloud and **Save as .r2pack** — that's the tournament organizer workflow, where the laptop building the pack isn't one of the setups. Importing, exporting, and publishing need a save file, and the app tells you which ones are unavailable.
+Partly, and deliberately so. With no save file present you can still search the tag tool database and **Save as .r2pack** — that's the tournament organizer workflow, where the laptop building the pack isn't one of the setups. Importing, exporting, and publishing need a save file, and the app tells you which ones are unavailable.
 
 **Does this modify my save file?**
 
@@ -120,7 +120,7 @@ The import screen flags it as a conflict. Conflicts default to **Skip**; toggle 
 
 **What becomes public when I publish a cloud tag?**
 
-Your public start.gg gamer tag and profile slug, the in-game tag name, save-format version, and compressed controls file become searchable/downloadable. The service does not store your email or start.gg OAuth tokens.
+Your public start.gg username and profile slug, the in-game tag name, save-format version, and compressed controls file become searchable/downloadable. The service does not store your email or start.gg OAuth tokens.
 
 **Why don't I see Player1–Player4 in the tag list?**
 

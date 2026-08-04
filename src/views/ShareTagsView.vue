@@ -81,16 +81,30 @@ function startReplace() {
   isReplacing.value = true;
 }
 
+// The backend flattens HTTP failures into strings, so a dead session is only
+// recognizable by its status line. When it happens, drop the stale identity
+// instead of showing "Signed in as ..." next to a raw 401.
+function handleCloudError(error: unknown) {
+  const message = String(error);
+  if (message.includes('Cloud API returned 401')) {
+    void auth.signOut();
+    isReplacing.value = false;
+    confirmingDelete.value = false;
+    errorMsg.value = 'Your session expired — please sign in again.';
+  } else {
+    errorMsg.value = message;
+  }
+}
+
+// The composable owns the in-flight state, so this only has to report failure.
+// Cancelling is a non-event: the user already knows they pressed the button.
 async function signIn() {
   errorMsg.value = '';
-  isWorking.value = true;
+  progress.value = '';
   try {
-    await auth.signIn((message) => (progress.value = message));
+    await auth.signIn();
   } catch (error) {
     errorMsg.value = String(error);
-    progress.value = '';
-  } finally {
-    isWorking.value = false;
   }
 }
 
@@ -108,7 +122,7 @@ async function uploadTag() {
     progress.value = 'Cloud tag published successfully.';
     isReplacing.value = false;
   } catch (error) {
-    errorMsg.value = String(error);
+    handleCloudError(error);
   } finally {
     isWorking.value = false;
   }
@@ -123,7 +137,7 @@ async function deleteTag() {
     auth.publishedTag.value = null;
     progress.value = 'Cloud tag removed.';
   } catch (error) {
-    errorMsg.value = String(error);
+    handleCloudError(error);
   } finally {
     isWorking.value = false;
   }
@@ -183,7 +197,21 @@ async function exportSelected() {
 
     <!-- Publish to Cloud -->
     <div v-if="tab === 'publish'" class="view-stack">
-      <div v-if="isWorking" class="loading-panel">Working with the cloud service…</div>
+      <!-- The browser round trip gets its own panel: it is the one wait the app
+           cannot end on its own, so it says what it is waiting for and always
+           offers a way out. -->
+      <template v-if="auth.isSigningIn.value">
+        <div class="loading-panel">{{ auth.signInStatus.value }}</div>
+        <p class="sign-in-hint">
+          A <strong>start.gg</strong> page opened in your browser — approve access there.
+        </p>
+        <button class="btn btn-primary btn-primary-muted" @click="auth.cancelSignIn()">
+          <v-icon name="md-close-round" scale="0.85" />
+          Cancel Sign-in
+        </button>
+      </template>
+
+      <div v-else-if="isWorking" class="loading-panel">Working with the cloud service…</div>
 
       <template v-else>
         <button
@@ -276,14 +304,17 @@ async function exportSelected() {
                 Remove
               </button>
             </div>
-            <button v-else class="danger-btn" @click="confirmingDelete = true">
+            <button v-else class="btn danger-btn" @click="confirmingDelete = true">
               <v-icon name="md-delete-round" scale="0.85" />
               Delete Published Tag
             </button>
           </template>
         </template>
 
-        <p v-if="progress" class="hint">{{ progress }}</p>
+        <p v-if="progress" class="progress-msg">
+          <v-icon name="md-checkcircle-round" scale="0.8" />
+          {{ progress }}
+        </p>
       </template>
     </div>
 
@@ -382,7 +413,6 @@ async function exportSelected() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.15rem;
 }
 
 .identity-name,
@@ -402,17 +432,25 @@ async function exportSelected() {
   margin-top: 0.1rem;
 }
 
+// Outlined, matching .panel-btn: the same kind of small secondary control
+// tucked into a panel header, and it should read as a button rather than as
+// part of the label beside it.
 .link-btn {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: 0.3em;
   background: none;
-  border: 0;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-button);
   color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 0.3em 0.6em;
   cursor: pointer;
+  transition: color 500ms, border-color 500ms;
 
   &:hover {
     color: var(--text-primary);
+    border-color: var(--accent);
   }
 }
 
@@ -430,33 +468,49 @@ async function exportSelected() {
   }
 }
 
-.hint,
 .disclosure {
   width: 100%;
   color: var(--text-muted);
   font-size: 0.76rem;
 }
 
-.danger-btn {
+.sign-in-hint {
+  width: 100%;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: center;
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+}
+
+.progress-msg {
   width: 100%;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.65rem;
-  border: 1px solid rgba(248, 113, 113, 0.4);
-  border-radius: 0.4rem;
+  gap: 0.45rem;
+  padding: 0.65rem 0.8rem;
+  background: rgba(0, 255, 170, 0.06);
+  border: 1px solid rgba(0, 255, 170, 0.2);
+  border-radius: var(--radius-panel);
+  color: var(--text-success);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+// Sizing comes from .btn; this only recolors it. Restating the box here is what
+// let it drift out of step with every other full-width button.
+.danger-btn {
+  border-color: rgba(248, 113, 113, 0.4);
   background: rgba(248, 113, 113, 0.1);
   color: var(--text-failure);
-  font-size: 0.9em;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 500ms, border-color 500ms, transform 500ms;
 
   &:hover {
     background: rgba(248, 113, 113, 0.18);
     border-color: rgba(248, 113, 113, 0.65);
-    transform: translateY(-0.2em);
   }
 }
 
@@ -562,7 +616,7 @@ async function exportSelected() {
 
   .btn {
     flex: 1;
-    font-size: 0.82em;
+    font-size: 0.9em;
   }
 }
 
