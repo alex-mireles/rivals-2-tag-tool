@@ -28,6 +28,7 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
       :disabled="isWorking || !query.trim() || disabled"
       @click="$emit('search')"
     >
+      <v-icon name="md-search-round" scale="0.85" />
       Search
     </button>
   </div>
@@ -36,6 +37,7 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
     <div class="tag-panel-header">
       <span class="tag-panel-label">Available Tags</span>
       <button class="small-btn" @click="$emit('toggle-all')">
+        <v-icon name="md-doneall-round" scale="0.7" />
         {{ allSelected ? 'Deselect All' : 'Select All' }}
       </button>
     </div>
@@ -118,7 +120,7 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 500ms, border-color 500ms;
 
   &--checked {
     background: var(--accent);
@@ -127,6 +129,9 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
 }
 
 .small-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
   background: none;
   border: 1px solid var(--line-subtle);
   color: var(--text-muted);
@@ -134,7 +139,7 @@ defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
   padding: 0.25em 0.6em;
   border-radius: var(--radius-button);
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 500ms, border-color 500ms;
 
   &:hover {
     color: var(--text-primary);

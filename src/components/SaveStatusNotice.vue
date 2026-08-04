@@ -45,6 +45,7 @@ const detail = computed(() => {
   <div v-if="detail" class="save-notice">
     <span class="save-notice-text">{{ detail.text }}</span>
     <button v-if="detail.action === 'retry'" class="save-notice-action" @click="save.reload()">
+      <v-icon name="md-refresh-round" scale="0.75" />
       Retry
     </button>
     <button
@@ -52,9 +53,13 @@ const detail = computed(() => {
       class="save-notice-action"
       @click="save.resetToDefault()"
     >
+      <v-icon name="md-restartalt-round" scale="0.75" />
       Reset to default
     </button>
-    <button v-else class="save-notice-action" @click="save.choose()">Choose a save file…</button>
+    <button v-else class="save-notice-action" @click="save.choose()">
+      <v-icon name="md-folderopen-round" scale="0.75" />
+      Choose a save file…
+    </button>
   </div>
 </template>
 
@@ -78,6 +83,9 @@ const detail = computed(() => {
 
   &-action {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
     border: 1px solid var(--line);
     background: var(--surface-hover);
     color: var(--text-primary);
@@ -85,7 +93,7 @@ const detail = computed(() => {
     padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
     cursor: pointer;
-    transition: border-color 0.15s;
+    transition: border-color 500ms;
 
     &:hover {
       border-color: var(--accent);

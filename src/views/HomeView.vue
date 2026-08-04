@@ -126,7 +126,7 @@ const savePathStatus = computed(() => {
   border-radius: var(--radius-button);
   color: var(--text-muted);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition: color 500ms, background 500ms;
 
   &:hover:not(:disabled) {
     color: var(--text-primary);
@@ -187,10 +187,6 @@ const savePathStatus = computed(() => {
 
   .btn {
     flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5em;
   }
 }
 

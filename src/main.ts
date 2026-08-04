@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { OhVueIcon, addIcons } from 'oh-vue-icons';
 import {
   MdFolderopenRound,
+  MdFolderRound,
   MdRefreshRound,
   MdFileopenRound,
   MdCheckRound,
@@ -9,6 +10,19 @@ import {
   MdArrowbackRound,
   MdDownloadRound,
   MdUploadRound,
+  MdClouduploadRound,
+  MdRestartaltRound,
+  MdDoneallRound,
+  MdSwaphorizRound,
+  MdStopcircleRound,
+  MdArchiveRound,
+  MdLogoutRound,
+  MdDeleteRound,
+  MdPersonsearchRound,
+  MdEmojieventsRound,
+  MdSearchRound,
+  MdExpandmoreRound,
+  MdExpandlessRound,
 } from 'oh-vue-icons/icons/md';
 import App from './App.vue';
 import '@fontsource-variable/inter';
@@ -19,6 +33,7 @@ import './styles/global.scss';
 // e.g. `import { MdHome } from 'oh-vue-icons/icons/md';`
 addIcons(
   MdFolderopenRound,
+  MdFolderRound,
   MdRefreshRound,
   MdFileopenRound,
   MdCheckRound,
@@ -26,6 +41,19 @@ addIcons(
   MdArrowbackRound,
   MdDownloadRound,
   MdUploadRound,
+  MdClouduploadRound,
+  MdRestartaltRound,
+  MdDoneallRound,
+  MdSwaphorizRound,
+  MdStopcircleRound,
+  MdArchiveRound,
+  MdLogoutRound,
+  MdDeleteRound,
+  MdPersonsearchRound,
+  MdEmojieventsRound,
+  MdSearchRound,
+  MdExpandmoreRound,
+  MdExpandlessRound,
 );
 
 const app = createApp(App);

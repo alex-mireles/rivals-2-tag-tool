@@ -6,8 +6,10 @@ import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import AnimatedCard from '../components/AnimatedCard.vue';
 import SaveStatusNotice from '../components/SaveStatusNotice.vue';
 import TabBar from '../components/TabBar.vue';
+import TagSelect from '../components/TagSelect.vue';
 import TagSelectList from '../components/TagSelectList.vue';
 import ViewHeader from '../components/ViewHeader.vue';
+import startggIcon from '../assets/startgg.svg';
 import { apiBaseUrl, cloudConfigured, CLOUD_UNCONFIGURED_MESSAGE } from '../cloud';
 import { useCloudAuth } from '../composables/useCloudAuth';
 import { useSaveFile } from '../composables/useSaveFile';
@@ -25,9 +27,9 @@ type TabName = 'publish' | 'export';
 type ExportTarget = 'folder' | 'pack';
 
 const TABS = [
-  { id: 'publish', label: 'Publish to Cloud' },
-  { id: 'export', label: 'Export to Files' },
-] as const satisfies readonly { id: TabName; label: string }[];
+  { id: 'publish', label: 'Publish to Cloud', icon: 'md-cloudupload-round' },
+  { id: 'export', label: 'Export to Files', icon: 'md-folder-round' },
+] as const satisfies readonly { id: TabName; label: string; icon: string }[];
 
 const emit = defineEmits<{ 'go-back': [] }>();
 
@@ -39,6 +41,8 @@ const errorMsg = ref(cloudConfigured ? '' : CLOUD_UNCONFIGURED_MESSAGE);
 const progress = ref('');
 const isWorking = ref(false);
 const confirmingDelete = ref(false);
+// Overwriting a published tag is deliberate: pick a tag, then confirm.
+const isReplacing = ref(false);
 
 const uploadTagName = ref(save.tagNames.value[0] ?? '');
 const exportTarget = ref<ExportTarget>('folder');
@@ -65,6 +69,16 @@ function switchTab(next: TabName) {
   progress.value = '';
   exportResult.value = null;
   confirmingDelete.value = false;
+  isReplacing.value = false;
+}
+
+function startReplace() {
+  confirmingDelete.value = false;
+  progress.value = '';
+  // Re-publishing the same tag is a refresh, so start the picker there.
+  const published = auth.publishedTag.value?.tagName;
+  if (published && save.tagNames.value.includes(published)) uploadTagName.value = published;
+  isReplacing.value = true;
 }
 
 async function signIn() {
@@ -92,6 +106,7 @@ async function uploadTag() {
       tagName: uploadTagName.value,
     });
     progress.value = 'Cloud tag published successfully.';
+    isReplacing.value = false;
   } catch (error) {
     errorMsg.value = String(error);
   } finally {
@@ -177,47 +192,92 @@ async function exportSelected() {
           :disabled="!cloudConfigured"
           @click="signIn"
         >
+          <img :src="startggIcon" alt="" class="startgg-icon" />
           Sign in with start.gg
         </button>
 
         <template v-else>
           <div class="identity">
-            <strong>{{ auth.signedInUser.value.gamerTag }}</strong>
-            <span>{{ auth.signedInUser.value.slug }}</span>
-            <button class="link-btn" @click="auth.signOut()">Sign out</button>
+            <div class="identity-header">
+              <span class="panel-label">Signed in as</span>
+              <button class="link-btn" @click="auth.signOut()">
+                <v-icon name="md-logout-round" scale="0.75" />
+                Sign out
+              </button>
+            </div>
+            <strong class="identity-name">{{ auth.signedInUser.value.gamerTag }}</strong>
+            <span class="identity-slug">{{ auth.signedInUser.value.slug }}</span>
           </div>
 
           <div v-if="auth.publishedTag.value" class="published">
-            <span>Published tag</span>
-            <strong>{{ auth.publishedTag.value.tagName }}</strong>
+            <span class="panel-label">Published Tag</span>
+            <strong class="published-name">{{ auth.publishedTag.value.tagName }}</strong>
             <small>Updated {{ new Date(auth.publishedTag.value.updatedAt).toLocaleString() }}</small>
           </div>
 
-          <label class="upload-label">
-            Tag from loaded save
-            <select v-model="uploadTagName" :disabled="!save.hasTags.value">
-              <option v-for="name in save.tagNames.value" :key="name" :value="name">
-                {{ name }}
-              </option>
-            </select>
-          </label>
+          <template v-if="!auth.publishedTag.value || isReplacing">
+            <div class="tag-panel publish-panel">
+              <span class="tag-panel-label">
+                {{ isReplacing ? 'Select a Replacement Tag' : 'Tag to Publish' }}
+              </span>
+              <TagSelect
+                v-model="uploadTagName"
+                :options="save.tagNames.value"
+                :disabled="!save.hasTags.value"
+              />
+            </div>
 
-          <p class="disclosure">
-            Publishing makes your start.gg gamer tag, profile slug, in-game tag name, and controls
-            file publicly downloadable, and may be saved offline by others.
-          </p>
+            <p class="disclosure">
+              Publishing makes your start.gg username and in-game tag public.
+            </p>
+          </template>
 
-          <button class="btn btn-primary" :disabled="!canPublish || !uploadTagName" @click="uploadTag">
-            {{ auth.publishedTag.value ? 'Replace Published Tag' : 'Publish Tag' }}
+          <!-- Step 2 of a replace: confirm the swap, or back out of it. -->
+          <div v-if="isReplacing" class="action-row">
+            <button class="btn btn-primary btn-primary-muted" @click="isReplacing = false">
+              <v-icon name="md-close-round" scale="0.85" />
+              Cancel
+            </button>
+            <button
+              class="btn btn-primary"
+              :disabled="!canPublish || !uploadTagName"
+              @click="uploadTag"
+            >
+              <v-icon name="md-cloudupload-round" scale="0.85" />
+              Replace Published Tag
+            </button>
+          </div>
+
+          <button
+            v-else-if="!auth.publishedTag.value"
+            class="btn btn-primary"
+            :disabled="!canPublish || !uploadTagName"
+            @click="uploadTag"
+          >
+            <v-icon name="md-cloudupload-round" scale="0.85" />
+            Publish Tag
           </button>
 
-          <template v-if="auth.publishedTag.value">
+          <template v-else>
+            <!-- Step 1 of a replace: opt in before the tag picker appears. -->
+            <button class="btn btn-primary" :disabled="!canPublish" @click="startReplace">
+              <v-icon name="md-swaphoriz-round" scale="0.85" />
+              Replace Published Tag
+            </button>
+
             <div v-if="confirmingDelete" class="confirm">
               <span class="confirm-text">Remove your published cloud tag?</span>
-              <button class="confirm-btn" @click="confirmingDelete = false">Cancel</button>
-              <button class="confirm-btn confirm-btn--danger" @click="deleteTag">Remove</button>
+              <button class="confirm-btn" @click="confirmingDelete = false">
+                <v-icon name="md-close-round" scale="0.7" />
+                Cancel
+              </button>
+              <button class="confirm-btn confirm-btn--danger" @click="deleteTag">
+                <v-icon name="md-delete-round" scale="0.7" />
+                Remove
+              </button>
             </div>
             <button v-else class="danger-btn" @click="confirmingDelete = true">
+              <v-icon name="md-delete-round" scale="0.85" />
               Delete Published Tag
             </button>
           </template>
@@ -239,11 +299,15 @@ async function exportSelected() {
           </span>
         </div>
         <div class="action-row">
-          <button class="btn btn-primary" @click="exportResult = null">Export More</button>
+          <button class="btn btn-primary" @click="exportResult = null">
+            <v-icon name="md-refresh-round" scale="0.85" />
+            Export More
+          </button>
           <button
             class="btn btn-primary btn-primary-muted"
             @click="revealItemInDir(exportResult!.location)"
           >
+            <v-icon name="md-folderopen-round" scale="0.85" />
             Show in Folder
           </button>
         </div>
@@ -263,6 +327,7 @@ async function exportSelected() {
             :class="{ active: exportTarget === 'folder' }"
             @click="exportTarget = 'folder'"
           >
+            <v-icon name="md-folder-round" scale="0.75" />
             Folder of .r2tag files
           </button>
           <button
@@ -270,6 +335,7 @@ async function exportSelected() {
             :class="{ active: exportTarget === 'pack' }"
             @click="exportTarget = 'pack'"
           >
+            <v-icon name="md-archive-round" scale="0.75" />
             Single .r2pack
           </button>
         </div>
@@ -279,6 +345,7 @@ async function exportSelected() {
           :disabled="!selected.size || !save.canWriteSave.value"
           @click="exportSelected"
         >
+          <v-icon name="md-upload-round" scale="0.85" />
           Export {{ selected.size || '' }} Selected Tag{{ selected.size === 1 ? '' : 's' }}
         </button>
       </template>
@@ -293,27 +360,52 @@ async function exportSelected() {
 .published {
   width: 100%;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.7rem;
-  background: var(--surface-inset);
-  border-radius: 0.4rem;
-}
-
-.identity span,
-.published small {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  flex: 1;
-}
-
-.published {
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.2rem;
+  gap: 0.25rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--surface-inset);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-panel);
+}
+
+.panel-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.identity-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.15rem;
+}
+
+.identity-name,
+.published-name {
+  font-size: 1.05rem;
+}
+
+.identity-slug {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-family: 'Ubuntu Sans Mono Variable', monospace;
+}
+
+.published small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-top: 0.1rem;
 }
 
 .link-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
   background: none;
   border: 0;
   color: var(--text-muted);
@@ -324,21 +416,17 @@ async function exportSelected() {
   }
 }
 
-.upload-label {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  color: var(--text-muted);
-  font-size: 0.8rem;
+.startgg-icon {
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+}
 
-  select {
-    padding: 0.65rem;
-    color: var(--text-primary);
-    background: var(--surface-inset);
-    border: 1px solid var(--line);
-    border-radius: 0.4rem;
-    font-family: inherit;
+.publish-panel {
+  padding-bottom: 0.75rem;
+
+  .tag-panel-label {
+    margin-bottom: 0.5rem;
   }
 }
 
@@ -351,12 +439,25 @@ async function exportSelected() {
 
 .danger-btn {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.65rem;
   border: 1px solid rgba(248, 113, 113, 0.4);
   border-radius: 0.4rem;
   background: rgba(248, 113, 113, 0.1);
   color: var(--text-failure);
+  font-size: 0.9em;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 500ms, border-color 500ms, transform 500ms;
+
+  &:hover {
+    background: rgba(248, 113, 113, 0.18);
+    border-color: rgba(248, 113, 113, 0.65);
+    transform: translateY(-0.2em);
+  }
 }
 
 .confirm {
@@ -378,6 +479,9 @@ async function exportSelected() {
 
   &-btn {
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
     border: 1px solid var(--line);
     background: var(--surface-hover);
     color: var(--text-primary);
@@ -385,10 +489,22 @@ async function exportSelected() {
     padding: 0.3rem 0.6rem;
     font-size: 0.75rem;
     cursor: pointer;
+    transition: border-color 500ms, background 500ms, transform 500ms;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.22);
+      border-color: var(--accent);
+      transform: translateY(-0.15em);
+    }
 
     &--danger {
       border-color: rgba(248, 113, 113, 0.5);
       color: var(--text-failure);
+
+      &:hover {
+        background: rgba(248, 113, 113, 0.2);
+        border-color: rgba(248, 113, 113, 0.9);
+      }
     }
   }
 }
@@ -407,6 +523,10 @@ async function exportSelected() {
 
   .target-btn {
     flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
     border: 1px solid var(--line);
     border-radius: 0.4rem;
     padding: 0.4rem;
@@ -414,12 +534,23 @@ async function exportSelected() {
     background: var(--surface-inset);
     color: var(--text-muted);
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition: color 500ms, border-color 500ms, background 500ms, transform 500ms;
+
+    &:hover {
+      color: var(--text-primary);
+      background: var(--surface-hover);
+      transform: translateY(-0.15em);
+    }
 
     &.active {
       color: var(--text-primary);
       border-color: var(--accent);
       background: var(--accent-completed);
+
+      &:hover {
+        background: var(--accent-completed);
+        border-color: var(--accent-hover);
+      }
     }
   }
 }

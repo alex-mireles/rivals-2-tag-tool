@@ -133,7 +133,7 @@ button:focus-visible {
 
 // Shell rendered by AnimatedCard.vue; its inline height tracks .card-content.
 .card {
-  width: 500px;
+  width: 600px;
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -148,6 +148,11 @@ button:focus-visible {
   align-items: center;
   padding: 1.5rem;
   gap: 1rem;
+  // The window is fixed at 720px and can't scroll, so a view that outgrows it
+  // scrolls in here instead of running off-screen. AnimatedCard measures this
+  // element, so the card stops growing at the same point.
+  max-height: 660px;
+  overflow-y: auto;
 }
 
 // A swappable block inside the card; mirrors the card-content column layout.
@@ -172,6 +177,10 @@ button:focus-visible {
 
 .btn {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
   cursor: pointer;
   border-radius: var(--radius-button);
   padding: 0.7em;
@@ -227,7 +236,7 @@ button:focus-visible {
     color: var(--text-muted);
     padding: 0.25em;
     border-radius: var(--radius-button);
-    transition: color 0.15s, background 0.15s;
+    transition: color 500ms, background 500ms;
     width: 2rem;
     height: 2rem;
 

@@ -29,10 +29,10 @@ import type { CloudDownload, PackSummary, PreviewResult, TagPreview, UnpackResul
 type TabName = 'player' | 'tournament' | 'files';
 
 const TABS = [
-  { id: 'player', label: 'Find Player' },
-  { id: 'tournament', label: 'Find Tournament' },
-  { id: 'files', label: 'From Files' },
-] as const satisfies readonly { id: TabName; label: string }[];
+  { id: 'player', label: 'Find Player', icon: 'md-personsearch-round' },
+  { id: 'tournament', label: 'Find Tournament', icon: 'md-emojievents-round' },
+  { id: 'files', label: 'From Files', icon: 'md-folder-round' },
+] as const satisfies readonly { id: TabName; label: string; icon: string }[];
 
 const emit = defineEmits<{ 'go-back': [] }>();
 
@@ -277,6 +277,7 @@ onBeforeUnmount(() => {
             {{ tab === 'tournament' ? 'Scanning registered players…' : 'Searching…' }}
           </div>
           <button v-if="tab === 'tournament'" class="btn btn-primary btn-primary-muted" @click="search.cancel()">
+            <v-icon name="md-stopcircle-round" scale="0.85" />
             Stop Scanning
           </button>
         </template>
@@ -291,11 +292,15 @@ onBeforeUnmount(() => {
             </span>
           </div>
           <div class="action-row">
-            <button class="btn btn-primary" @click="packSaved = null">Back to Results</button>
+            <button class="btn btn-primary" @click="packSaved = null">
+              <v-icon name="md-arrowback-round" scale="0.85" />
+              Back to Results
+            </button>
             <button
               class="btn btn-primary btn-primary-muted"
               @click="revealItemInDir(packSaved!.outputPath)"
             >
+              <v-icon name="md-folderopen-round" scale="0.85" />
               Show in Folder
             </button>
           </div>
@@ -309,6 +314,7 @@ onBeforeUnmount(() => {
               :disabled="!search.selected.value.size || !save.canWriteSave.value"
               @click="importSelected"
             >
+              <v-icon name="md-download-round" scale="0.85" />
               Import {{ search.selected.value.size }} Tag{{ search.selected.value.size === 1 ? '' : 's' }}
             </button>
             <button
@@ -316,6 +322,7 @@ onBeforeUnmount(() => {
               :disabled="!search.selected.value.size"
               @click="savePack"
             >
+              <v-icon name="md-archive-round" scale="0.85" />
               Save as .r2pack
             </button>
           </div>
@@ -327,6 +334,7 @@ onBeforeUnmount(() => {
         <template v-else>
           <SaveStatusNotice v-if="!save.canWriteSave.value" context="import" />
           <button class="btn btn-primary" :disabled="!save.canWriteSave.value" @click="chooseFiles">
+            <v-icon name="md-fileopen-round" scale="0.85" />
             Choose Tag Files
           </button>
           <p class="hint hint--center">

@@ -79,7 +79,10 @@ async function doImport() {
     <p v-if="result.imported.length" class="hint">
       Restart Rivals 2 if it is open — it rewrites this file on exit and would discard these tags.
     </p>
-    <button class="btn btn-primary" @click="emit('reset')">{{ resetLabel ?? 'Import More' }}</button>
+    <button class="btn btn-primary" @click="emit('reset')">
+      <v-icon name="md-refresh-round" scale="0.85" />
+      {{ resetLabel ?? 'Import More' }}
+    </button>
   </div>
 
   <div v-else-if="isImporting" class="loading-panel">Writing to save file...</div>
@@ -90,7 +93,10 @@ async function doImport() {
     <div class="tag-panel">
       <div class="tag-panel-header">
         <span class="tag-panel-label">Tags to Import <small v-if="saveVersion !== null">Save v{{ saveVersion }}</small></span>
-        <button v-if="conflictNames.size" class="small-btn" @click="toggleAllConflicts">{{ allOverwrite ? 'Skip All' : 'Overwrite All' }}</button>
+        <button v-if="conflictNames.size" class="small-btn" @click="toggleAllConflicts">
+          <v-icon name="md-doneall-round" scale="0.7" />
+          {{ allOverwrite ? 'Skip All' : 'Overwrite All' }}
+        </button>
       </div>
       <ul class="tag-list">
         <li v-for="preview in previews" :key="preview.path" class="tag-row review-row" :class="{ incompatible: !preview.compatible }">
@@ -98,6 +104,7 @@ async function doImport() {
           <span v-if="preview.error" class="badge badge--error">Unreadable</span>
           <span v-else-if="!preview.compatible" class="badge badge--error">{{ preview.version === null ? 'Unknown version' : `v${preview.version}` }}</span>
           <button v-else-if="conflictNames.has(preview.tag_name)" class="small-btn" @click="toggleOverwrite(preview.tag_name)">
+            <v-icon name="md-swaphoriz-round" scale="0.7" />
             {{ overwriteSet.has(preview.tag_name) ? 'Overwrite' : 'Skip' }}
           </button>
           <span v-else class="badge">New</span>
@@ -109,6 +116,7 @@ async function doImport() {
     <p v-if="unreadableCount" class="hint"><strong>{{ unreadableCount }}</strong> file(s) could not be read and will be skipped.</p>
     <div v-if="errorMsg" class="error-msg">{{ errorMsg }}</div>
     <button class="btn btn-primary" :disabled="compatiblePreviews.length === 0" @click="doImport">
+      <v-icon name="md-download-round" scale="0.85" />
       Import {{ compatiblePreviews.length }} Compatible Tag{{ compatiblePreviews.length === 1 ? '' : 's' }}
     </button>
   </div>
@@ -119,7 +127,7 @@ async function doImport() {
 .review-row > div { min-width: 0; display: flex; flex-direction: column; }
 .review-row small { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .incompatible { opacity: 0.55; }
-.small-btn { border: 1px solid var(--line); background: var(--surface-hover); color: var(--text-primary); border-radius: 0.4rem; padding: 0.25rem 0.5rem; cursor: pointer; }
+.small-btn { display: flex; align-items: center; gap: 0.3rem; border: 1px solid var(--line); background: var(--surface-hover); color: var(--text-primary); border-radius: 0.4rem; padding: 0.25rem 0.5rem; cursor: pointer; }
 .badge { color: var(--text-success); font-weight: 700; &--error { color: var(--text-failure); } }
 .hint { width: 100%; color: var(--text-muted); font-size: 0.78rem; }
 .result-panel { width: 100%; display: flex; flex-direction: column; gap: 0.6rem; }
