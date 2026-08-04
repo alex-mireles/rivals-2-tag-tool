@@ -25,7 +25,7 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use super::cloud::{staging_dir, MAX_UNCOMPRESSED_BYTES};
-use super::tags::{first_tag_name, save_version, single_tag_bytes, unique_file_stem};
+use super::tags::{first_tag_name, save_version, single_tag_bytes_batch, unique_file_stem};
 
 /// Bumped only for changes an older build must refuse to read.
 const PACK_FORMAT_VERSION: u32 = 1;
@@ -254,18 +254,20 @@ pub async fn pack_tags_from_save(
     label: Option<String>,
 ) -> Result<PackSummary, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut sources = Vec::with_capacity(tag_names.len());
-        for tag_name in tag_names {
-            let (bytes, save_version) = single_tag_bytes(&save_path, &tag_name)?;
-            sources.push(PackSource {
+        // One parse of the save covers every selected tag.
+        let payloads = single_tag_bytes_batch(&save_path, &tag_names)?;
+        let sources = tag_names
+            .into_iter()
+            .zip(payloads)
+            .map(|(tag_name, (bytes, save_version))| PackSource {
                 bytes,
                 display_name: tag_name.clone(),
                 tag_name,
                 gamer_tag: None,
                 startgg_slug: None,
                 save_version,
-            });
-        }
+            })
+            .collect();
         write_pack(sources, &output_path, label, None)
     })
     .await
@@ -368,6 +370,25 @@ fn read_manifest<R: Read + std::io::Seek>(
     Ok(Some(manifest))
 }
 
+/// Label for an entry the manifest doesn't name: the bare file stem.
+///
+/// Strips by length rather than pattern, because the extension check that got
+/// us here is case-insensitive — `trim_end_matches(".r2tag")` would leave
+/// `.R2TAG` attached, and would strip a repeated suffix. Any directory part
+/// goes too: this is archive-controlled text on its way to the UI, and only the
+/// last component is meaningful.
+fn display_name_of(name: &str) -> String {
+    let stem = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(name);
+    // The lowercase form ended with the ASCII `.r2tag`, so these last bytes are
+    // ASCII in the original too and the split is on a char boundary.
+    stem.get(..stem.len().saturating_sub(TAG_EXTENSION.len()))
+        .unwrap_or(stem)
+        .to_string()
+}
+
 /// A payload is a usable tag if it parses as a save and names a tag.
 fn is_valid_tag_payload(bytes: &[u8]) -> bool {
     Save::read(&mut Cursor::new(bytes))
@@ -424,7 +445,6 @@ fn unpack_with(
     let mut paths = Vec::new();
     let mut skipped = Vec::new();
     let mut total_bytes: u64 = 0;
-    let mut tag_entries = 0usize;
 
     let mut extract = || -> Result<(), String> {
         for index in 0..zip.len() {
@@ -442,12 +462,6 @@ fn unpack_with(
                 continue;
             }
 
-            tag_entries += 1;
-            if tag_entries > MAX_PACK_ENTRIES {
-                return Err(format!(
-                    "This .r2pack holds more than {MAX_PACK_ENTRIES} tags"
-                ));
-            }
             if entry.encrypted() {
                 return Err("This .r2pack is encrypted and cannot be opened".into());
             }
@@ -478,7 +492,7 @@ fn unpack_with(
             let meta = by_file.get(&name);
             let display = meta
                 .and_then(|m| m.gamer_tag.clone())
-                .unwrap_or_else(|| name.trim_end_matches(TAG_EXTENSION).to_string());
+                .unwrap_or_else(|| display_name_of(&name));
 
             // Validate before writing: a truncated USB copy becomes one skipped
             // row rather than a file the import step later chokes on.
@@ -804,6 +818,19 @@ mod tests {
 
         assert_eq!(result.entry_count, 1, "the readable tag still imports");
         assert_eq!(result.skipped, vec!["TRUNCATED".to_string()]);
+    }
+
+    #[test]
+    fn display_names_survive_odd_entry_names() {
+        // The entry filter is case-insensitive, so stripping must be too.
+        assert_eq!(display_name_of("HYPER.R2TAG"), "HYPER");
+        assert_eq!(display_name_of("HYPER.r2tag"), "HYPER");
+        // Only the last suffix goes, and only the last path component is shown.
+        assert_eq!(display_name_of("x.r2tag.r2tag"), "x.r2tag");
+        assert_eq!(display_name_of("evil/../HYPER.r2tag"), "HYPER");
+        assert_eq!(display_name_of(r"sub\dir\HYPER.r2tag"), "HYPER");
+        // Non-ASCII ahead of the suffix must not split a char boundary.
+        assert_eq!(display_name_of("ザ.r2tag"), "ザ");
     }
 
     #[test]

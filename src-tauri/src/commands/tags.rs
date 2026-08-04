@@ -4,6 +4,11 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use uesave::{Property, PropertyKey, Save, StructValue, ValueVec};
 
+/// Refuse a `.r2tag` that claims one of the game's own profiles. Export already
+/// blocks these; without the same guard on the way in, a hand-made file
+/// overwrites a Player1–Player4 profile the UI can neither list nor restore.
+const BUILT_IN_REJECTED: &str = "Built-in player tags cannot be imported";
+
 pub const DEFAULT_TAG_NAMES: [&str; 4] = ["Player1", "Player2", "Player3", "Player4"];
 
 fn is_custom_tag(name: &str) -> bool {
@@ -97,16 +102,40 @@ pub(crate) fn read_save(path: &str) -> Result<Save, String> {
     Save::read(&mut reader).map_err(|e| e.to_string())
 }
 
+/// The `SavedPlayerTags` array, or `None` when the property is absent or has
+/// another shape. Always reach for these rather than `properties["..."]`:
+/// `Properties` indexes an `IndexMap`, which *panics* on a missing key, and a
+/// save (or a hand-made `.r2tag`) with no tag array is an ordinary input.
+fn tag_array(save: &Save) -> Option<&Vec<StructValue>> {
+    match save.root.properties.0.get(&PropertyKey::from("SavedPlayerTags")) {
+        Some(Property::Array(ValueVec::Struct(structs))) => Some(structs),
+        _ => None,
+    }
+}
+
+fn tag_array_mut(save: &mut Save) -> Option<&mut Vec<StructValue>> {
+    match save
+        .root
+        .properties
+        .0
+        .get_mut(&PropertyKey::from("SavedPlayerTags"))
+    {
+        Some(Property::Array(ValueVec::Struct(structs))) => Some(structs),
+        _ => None,
+    }
+}
+
+const NOT_A_TAG_SAVE: &str = "SavedPlayerTags is missing or is not a struct array";
+
+/// One `.r2tag` payload: the serialized save bytes plus the save-format version
+/// they carry, which is what the destination has to match on import.
+pub(crate) type TagPayload = (Vec<u8>, Option<i32>);
+
 /// Custom tag names in a save, or `None` when `SavedPlayerTags` is missing or
 /// isn't a struct array — i.e. this parsed as a save but isn't a tag save.
 pub(crate) fn custom_tag_names(save: &Save) -> Option<Vec<String>> {
-    let tag_structs = match save.root.properties.0.get(&PropertyKey::from("SavedPlayerTags")) {
-        Some(Property::Array(ValueVec::Struct(structs))) => structs,
-        _ => return None,
-    };
-
     Some(
-        tag_structs
+        tag_array(save)?
             .iter()
             .filter_map(|sv| tag_name_of(sv))
             .filter(|name| is_custom_tag(name))
@@ -118,46 +147,59 @@ pub(crate) fn custom_tag_names(save: &Save) -> Option<Vec<String>> {
 /// First tag name in a save, whether custom or built-in. A `.r2tag` holds
 /// exactly one tag, so this identifies it.
 pub(crate) fn first_tag_name(save: &Save) -> Option<&str> {
-    match save.root.properties.0.get(&PropertyKey::from("SavedPlayerTags")) {
-        Some(Property::Array(ValueVec::Struct(structs))) => {
-            structs.iter().find_map(|sv| tag_name_of(sv))
+    tag_array(save)?.iter().find_map(|sv| tag_name_of(sv))
+}
+
+/// Build the single-tag save payloads for several tags from **one** parse of
+/// the source save. Every tag comes out of the same immutable file, so
+/// re-reading and re-parsing it per tag (which is what calling
+/// `single_tag_bytes` in a loop does) is pure waste on a 40-tag export.
+///
+/// Only reads the source save; the mutation below is to the in-memory copy.
+pub(crate) fn single_tag_bytes_batch(
+    save_path: &str,
+    tag_names: &[String],
+) -> Result<Vec<TagPayload>, String> {
+    let mut save = read_save(save_path)?;
+    let version = save_version(&save);
+    let all_tags = tag_array(&save).ok_or(NOT_A_TAG_SAVE)?.clone();
+
+    let mut out = Vec::with_capacity(tag_names.len());
+    for tag_name in tag_names {
+        if !is_custom_tag(tag_name) {
+            return Err("Built-in player tags cannot be exported".into());
         }
-        _ => None,
+
+        let only: Vec<StructValue> = all_tags
+            .iter()
+            .filter(|sv| tag_name_of(sv) == Some(tag_name.as_str()))
+            .cloned()
+            .collect();
+        if only.len() != 1 {
+            return Err(format!("Tag '{tag_name}' was not found exactly once"));
+        }
+
+        // Swap the one tag into the shared parse instead of re-reading the file.
+        *tag_array_mut(&mut save).ok_or(NOT_A_TAG_SAVE)? = only;
+        let mut bytes = Cursor::new(Vec::new());
+        save.write(&mut bytes).map_err(|e| e.to_string())?;
+        out.push((bytes.into_inner(), version));
     }
+    Ok(out)
 }
 
 /// Build the exact single-tag save payload used by both local export and cloud
 /// upload. This only reads the source save and never writes it.
-pub(crate) fn single_tag_bytes(
-    save_path: &str,
-    tag_name: &str,
-) -> Result<(Vec<u8>, Option<i32>), String> {
-    if !is_custom_tag(tag_name) {
-        return Err("Built-in player tags cannot be exported".into());
-    }
-
-    let mut save = read_save(save_path)?;
-    let version = save_version(&save);
-
-    let tag_structs = match &mut save.root.properties["SavedPlayerTags"] {
-        Property::Array(ValueVec::Struct(structs)) => structs,
-        _ => return Err("SavedPlayerTags is not a struct array".into()),
-    };
-    tag_structs.retain(|sv| tag_name_of(sv) == Some(tag_name));
-    if tag_structs.len() != 1 {
-        return Err(format!("Tag '{tag_name}' was not found exactly once"));
-    }
-
-    let mut bytes = Cursor::new(Vec::new());
-    save.write(&mut bytes).map_err(|e| e.to_string())?;
-    Ok((bytes.into_inner(), version))
+pub(crate) fn single_tag_bytes(save_path: &str, tag_name: &str) -> Result<TagPayload, String> {
+    single_tag_bytes_batch(save_path, &[tag_name.to_string()])?
+        .pop()
+        .ok_or_else(|| format!("Tag '{tag_name}' was not found exactly once"))
 }
 
 #[tauri::command]
 pub async fn get_tag_names(save_path: String) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        custom_tag_names(&read_save(&save_path)?)
-            .ok_or_else(|| "SavedPlayerTags is missing or is not a struct array".to_string())
+        custom_tag_names(&read_save(&save_path)?).ok_or_else(|| NOT_A_TAG_SAVE.to_string())
     })
     .await
     .map_err(|e| e.to_string())?
@@ -172,12 +214,12 @@ pub async fn export_tags(
     output_dir: String,
 ) -> Result<Vec<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut written = Vec::new();
+        // One parse of the save covers every selected tag.
+        let payloads = single_tag_bytes_batch(&save_path, &tag_names)?;
+        let mut written = Vec::with_capacity(payloads.len());
         let mut used_stems = HashSet::new();
 
-        for tag_name in &tag_names {
-            let (bytes, _) = single_tag_bytes(&save_path, tag_name)?;
-
+        for (tag_name, (bytes, _)) in tag_names.iter().zip(payloads) {
             let stem = unique_file_stem(tag_name, &mut used_stems);
             let out_path = std::path::Path::new(&output_dir).join(format!("{stem}.r2tag"));
             std::fs::write(&out_path, bytes).map_err(|e| e.to_string())?;
@@ -241,6 +283,15 @@ pub async fn get_tag_previews(
                         version: None,
                         compatible: false,
                         error: Some("No player tag found in this file".into()),
+                    },
+                    // Surfaced as an unimportable row, so the built-in guard in
+                    // `import_tags` is a backstop rather than the only check.
+                    Some(name) if !is_custom_tag(name) => TagPreview {
+                        tag_name: name.to_string(),
+                        version: save_version(&save),
+                        path,
+                        compatible: false,
+                        error: Some(BUILT_IN_REJECTED.into()),
                     },
                     Some(name) => {
                         let version = save_version(&save);
@@ -307,12 +358,19 @@ pub async fn import_tags(
 
         // Scope the mutable borrow of dest so dest.write() can proceed after the loop.
         {
-            let dest_structs = match &mut dest.root.properties["SavedPlayerTags"] {
-                Property::Array(ValueVec::Struct(structs)) => structs,
-                _ => return Err("SavedPlayerTags is not a struct array in destination save".into()),
-            };
+            let dest_structs = tag_array_mut(&mut dest)
+                .ok_or("SavedPlayerTags is missing or is not a struct array in destination save")?;
 
             for instruction in instructions {
+                // The game's own profiles are excluded from listing and export,
+                // so nothing this app produces names one. A file that does is
+                // rejected rather than allowed to replace a profile the user
+                // can neither see in the UI nor restore afterwards.
+                if !is_custom_tag(instruction.tag_name.as_str()) {
+                    incompatible.push(instruction.tag_name);
+                    continue;
+                }
+
                 let existing_pos = dest_structs
                     .iter()
                     .position(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()));
@@ -332,10 +390,8 @@ pub async fn import_tags(
                     continue;
                 }
 
-                let source_structs = match &r2tag_save.root.properties["SavedPlayerTags"] {
-                    Property::Array(ValueVec::Struct(structs)) => structs,
-                    _ => return Err(format!("{}: unexpected format", instruction.path)),
-                };
+                let source_structs = tag_array(&r2tag_save)
+                    .ok_or_else(|| format!("{}: unexpected format", instruction.path))?;
 
                 let tag_sv = source_structs
                     .iter()
@@ -393,8 +449,21 @@ pub async fn import_tags(
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_file_stem, unique_file_stem};
+    use super::{is_custom_tag, sanitize_file_stem, unique_file_stem, DEFAULT_TAG_NAMES};
     use std::collections::HashSet;
+
+    /// Import and export must agree on which names are the game's own, or a
+    /// hand-made `.r2tag` walks in through the side the guard is missing from.
+    #[test]
+    fn built_in_tag_names_are_not_custom() {
+        for name in DEFAULT_TAG_NAMES {
+            assert!(!is_custom_tag(name), "{name} must be rejected on both sides");
+        }
+        assert!(is_custom_tag("Player5"));
+        assert!(is_custom_tag("HYPER"));
+        // Case-sensitive by design: the game writes these names exactly.
+        assert!(is_custom_tag("player1"));
+    }
 
     #[test]
     fn distinct_names_that_sanitize_alike_get_unique_stems() {
@@ -440,5 +509,38 @@ mod tests {
     #[test]
     fn leaves_ordinary_names_untouched() {
         assert_eq!(sanitize_file_stem("Player Tag_42"), "Player Tag_42");
+    }
+
+    /// Exercises the real export path, which unit tests can't otherwise reach:
+    /// `uesave`'s types can't be constructed outside their crate, so there is no
+    /// way to hand-build a save fixture. Opt in against your own save with:
+    ///
+    /// ```text
+    /// R2_SAVE="$LOCALAPPDATA/Rivals2/Saved/SaveGames/Rivals2_PlayerTagSaveSlot.sav" \
+    ///   cargo test --manifest-path src-tauri/Cargo.toml -- --ignored
+    /// ```
+    #[test]
+    #[ignore = "needs a real save; set R2_SAVE"]
+    fn exported_payloads_carry_exactly_their_own_tag() {
+        use super::{custom_tag_names, first_tag_name, read_save, single_tag_bytes_batch};
+        use std::io::Cursor;
+        use uesave::Save;
+
+        let Ok(path) = std::env::var("R2_SAVE") else {
+            eprintln!("skipped: set R2_SAVE to a Rivals2_PlayerTagSaveSlot.sav");
+            return;
+        };
+        let names = custom_tag_names(&read_save(&path).unwrap()).unwrap();
+        assert!(!names.is_empty(), "save has no custom tags to export");
+
+        let payloads = single_tag_bytes_batch(&path, &names).unwrap();
+        assert_eq!(payloads.len(), names.len());
+        for (name, (bytes, version)) in names.iter().zip(&payloads) {
+            assert!(version.is_some(), "save version lost for {name}");
+            // A .r2tag is a complete save carrying exactly one tag — its own.
+            let parsed = Save::read(&mut Cursor::new(bytes)).unwrap();
+            assert_eq!(first_tag_name(&parsed), Some(name.as_str()));
+            assert_eq!(custom_tag_names(&parsed).unwrap(), vec![name.clone()]);
+        }
     }
 }

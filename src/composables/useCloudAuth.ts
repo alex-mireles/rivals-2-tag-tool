@@ -56,6 +56,32 @@ function cancelSignIn() {
 }
 
 /**
+ * What this user already has in the cloud, or `null` if the lookup failed.
+ *
+ * Runs *after* the session is live, so it must never throw: a sign-in that
+ * actually succeeded reporting failure would leave the UI showing "Signed in
+ * as …" beside an error. `null` costs the user only the two-step replace
+ * confirmation on their next publish, which the retry below restores.
+ */
+async function lookUpPublishedTag(user: CloudUser): Promise<CloudTagMetadata | null> {
+  try {
+    const owned = await invoke<CloudTagMetadata[]>('cloud_search_tags', {
+      apiBaseUrl,
+      query: user.slug,
+    });
+    return owned.find((tag) => tag.startggUserId === user.startggUserId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Re-run the published-tag lookup for the signed-in user. */
+async function refreshPublishedTag() {
+  if (!signedInUser.value) return;
+  publishedTag.value = await lookUpPublishedTag(signedInUser.value);
+}
+
+/**
  * Returns `'cancelled'` when the user backed out; throws for anything that
  * actually went wrong. The polling loop deliberately keeps running across
  * navigation — someone who approves in the browser after wandering back to the
@@ -92,12 +118,7 @@ async function signIn(): Promise<'signed-in' | 'cancelled'> {
       if (poll.status === 'complete' && poll.sessionToken && poll.user) {
         sessionToken.value = poll.sessionToken;
         signedInUser.value = poll.user;
-        const owned = await invoke<CloudTagMetadata[]>('cloud_search_tags', {
-          apiBaseUrl,
-          query: poll.user.slug,
-        });
-        publishedTag.value =
-          owned.find((tag) => tag.startggUserId === poll.user?.startggUserId) ?? null;
+        publishedTag.value = await lookUpPublishedTag(poll.user);
         return 'signed-in';
       }
     }
@@ -128,6 +149,7 @@ export function useCloudAuth() {
     isSigningIn,
     signInStatus,
     signIn,
+    refreshPublishedTag,
     cancelSignIn,
     signOut,
   };

@@ -58,21 +58,4 @@ function toggleAll() {
     }
   }
 }
-
-.tag-checkbox {
-  width: 1.1em;
-  height: 1.1em;
-  flex-shrink: 0;
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 500ms, border-color 500ms;
-
-  &--checked {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-}
 </style>

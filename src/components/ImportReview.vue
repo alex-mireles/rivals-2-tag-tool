@@ -22,9 +22,21 @@ const result = ref<ImportResult | null>(null);
 const errorMsg = ref('');
 
 const compatiblePreviews = computed(() => props.previews.filter((preview) => preview.compatible));
-const conflictNames = computed(() => new Set(
-  compatiblePreviews.value.map((preview) => preview.tag_name).filter((name) => props.tagNames.includes(name)),
-));
+
+// A conflict is anything whose import replaces a tag that would otherwise
+// survive — including a name claimed by an earlier row of this same batch. Two
+// files carrying the same tag name (two "Zetter"s from different players) would
+// otherwise both read as "New" and the second would silently overwrite the
+// first, while the result panel claimed two imports.
+const conflictNames = computed(() => {
+  const seen = new Set<string>();
+  const conflicts = new Set<string>();
+  for (const { tag_name: name } of compatiblePreviews.value) {
+    if (props.tagNames.includes(name) || seen.has(name)) conflicts.add(name);
+    seen.add(name);
+  }
+  return conflicts;
+});
 const allOverwrite = computed(() => conflictNames.value.size > 0 && [...conflictNames.value].every((name) => overwriteSet.value.has(name)));
 
 function toggleOverwrite(name: string) {
@@ -107,7 +119,10 @@ async function doImport() {
       <ul class="tag-list">
         <li v-for="preview in previews" :key="preview.path" class="tag-row review-row" :class="{ incompatible: !preview.compatible }">
           <div><strong>{{ preview.tag_name }}</strong><small>{{ preview.error ?? preview.path.split(/[\\/]/).pop() }}</small></div>
-          <span v-if="preview.error" class="badge badge--error">Unreadable</span>
+          <!-- Generic on purpose: an error row is now either an unreadable file
+               or a tag this app refuses to import. The reason sits under the
+               name, so the badge only has to say the row is out. -->
+          <span v-if="preview.error" class="badge badge--error">Can’t import</span>
           <span v-else-if="!preview.compatible" class="badge badge--error">{{ preview.version === null ? 'Unknown version' : `v${preview.version}` }}</span>
           <!-- Colour carries the outcome: yellow keeps the tag you already
                have, red replaces it. Both are one click from the other, so the

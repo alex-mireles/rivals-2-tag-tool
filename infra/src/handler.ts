@@ -355,13 +355,17 @@ async function tournamentTags(event: APIGatewayProxyEventV2): Promise<APIGateway
   }>('query CloudParticipants($slug:String!,$eventIds:[ID],$page:Int!) { tournament(slug:$slug) { participants(query:{page:$page,perPage:50,filter:{eventIds:$eventIds}}) { pageInfo { total totalPages } nodes { user { id slug } } } } }',
   { slug, eventIds, page }, token));
   const ids = [...new Set(participants.tournament.participants.nodes.flatMap((node) => node.user ? [String(node.user.id)] : []))];
-  let tagItems: TagItem[] = [];
-  if (ids.length > 0) {
-    const batch = await ddb.send(new BatchGetCommand({
-      RequestItems: { [TAGS_TABLE]: { Keys: ids.map((startggUserId) => ({ startggUserId })) } },
-    }));
-    tagItems = batch.Responses?.[TAGS_TABLE] as TagItem[] | undefined ?? [];
+  // BatchGet returns UnprocessedKeys under throttling rather than failing.
+  // Dropping them would silently hand a TO a bracket missing players' tags,
+  // with nothing in the response to say anything was left out.
+  const tagItems: TagItem[] = [];
+  let pending = ids.map((startggUserId) => ({ startggUserId }));
+  for (let attempt = 0; attempt < 4 && pending.length > 0; attempt += 1) {
+    const batch = await ddb.send(new BatchGetCommand({ RequestItems: { [TAGS_TABLE]: { Keys: pending } } }));
+    tagItems.push(...(batch.Responses?.[TAGS_TABLE] as TagItem[] | undefined ?? []));
+    pending = (batch.UnprocessedKeys?.[TAGS_TABLE]?.Keys ?? []) as typeof pending;
   }
+  if (pending.length > 0) throw new HttpError(503, 'The tag database is busy — try this page again');
   const matches = tagItems.map(publicTag);
   return json(200, {
     tournamentName: events.tournament.name,

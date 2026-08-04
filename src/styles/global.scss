@@ -441,6 +441,63 @@ button:focus-visible {
   }
 }
 
+// The square tick box on a selectable .tag-row — cloud results and the local
+// export list. Global for the same reason as .panel-btn: two identical copies
+// is one edit away from two different checkboxes.
+.tag-checkbox {
+  width: 1.1em;
+  height: 1.1em;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 500ms, border-color 500ms;
+
+  &--checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+}
+
+// A row of equal-width primary buttons. Views that pair it with a full-width
+// button above shrink the text; the box itself is the same everywhere.
+.action-row {
+  width: 100%;
+  display: flex;
+  gap: 0.625rem;
+
+  > .btn {
+    flex: 1;
+  }
+}
+
+// The "it worked, here's where it went" panel shown after an export or pack.
+.result-panel {
+  width: 100%;
+  padding: 1em;
+  border-radius: var(--radius-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+
+  &--success {
+    background: rgba(0, 255, 170, 0.06);
+    border: 1px solid rgba(0, 255, 170, 0.2);
+  }
+
+  &-msg {
+    font-size: 0.85em;
+    color: var(--text-success);
+  }
+
+  &-path {
+    font-family: 'Ubuntu Sans Mono Variable', monospace;
+    word-break: break-all;
+  }
+}
+
 .error-msg {
   width: 100%;
   padding: 0.6em 0.8em;

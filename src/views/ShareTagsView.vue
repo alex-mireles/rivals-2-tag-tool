@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { open, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -62,6 +62,14 @@ watch(
 const canPublish = computed(
   () => cloudConfigured && save.canWriteSave.value && save.hasTags.value,
 );
+
+// The session outlives this view, so a null `publishedTag` may be nothing more
+// than a lookup that failed during sign-in. Re-ask on the way in, rather than
+// offering a bare "Publish Tag" over a tag that already exists and skipping the
+// deliberate two-step replace.
+onMounted(() => {
+  if (auth.signedInUser.value && !auth.publishedTag.value) void auth.refreshPublishedTag();
+});
 
 function switchTab(next: TabName) {
   tab.value = next;
@@ -255,8 +263,12 @@ async function exportSelected() {
               />
             </div>
 
+            <!-- The second sentence is not optional: a downloaded tag can be
+                 bundled into a .r2pack and passed around offline, so deleting
+                 it here does not take those copies back. -->
             <p class="disclosure">
-              Publishing makes your start.gg username and in-game tag public.
+              Publishing makes your start.gg username and in-game tag public. Others can save
+              a copy offline, which stays with them even if you delete it later.
             </p>
           </template>
 
@@ -609,38 +621,8 @@ async function exportSelected() {
   }
 }
 
-.action-row {
-  width: 100%;
-  display: flex;
-  gap: 0.625rem;
-
-  .btn {
-    flex: 1;
-    font-size: 0.9em;
-  }
-}
-
-.result-panel {
-  width: 100%;
-  padding: 1em;
-  border-radius: var(--radius-panel);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-
-  &--success {
-    background: rgba(0, 255, 170, 0.06);
-    border: 1px solid rgba(0, 255, 170, 0.2);
-  }
-
-  &-msg {
-    font-size: 0.85em;
-    color: var(--text-success);
-  }
-
-  &-path {
-    font-family: 'Ubuntu Sans Mono Variable', monospace;
-    word-break: break-all;
-  }
+// Box comes from the global .action-row; only the text scale is this view's.
+.action-row .btn {
+  font-size: 0.9em;
 }
 </style>

@@ -39,8 +39,11 @@ const savePathStatus = computed(() => {
       :status="savePathStatus"
     >
       <template #actions>
+        <!-- `data-tooltip` is a ::after pseudo-element, so it carries no
+             accessible name of its own — these need `aria-label` too. -->
         <button
           class="path-action"
+          aria-label="Choose a different save file"
           data-tooltip="Choose a different save file"
           data-tooltip-align="end"
           @click="save.choose()"
@@ -49,6 +52,7 @@ const savePathStatus = computed(() => {
         </button>
         <button
           class="path-action"
+          aria-label="Reload tags from the save file"
           data-tooltip="Reload tags from the save file"
           data-tooltip-align="end"
           :disabled="isResolving"
@@ -187,16 +191,6 @@ const savePathStatus = computed(() => {
   &-row {
     justify-content: center;
     padding: 0.5em;
-  }
-}
-
-.action-row {
-  width: 100%;
-  display: flex;
-  gap: 0.625rem;
-
-  .btn {
-    flex: 1;
   }
 }
 

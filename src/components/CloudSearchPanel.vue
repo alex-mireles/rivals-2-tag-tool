@@ -19,7 +19,15 @@ const props = defineProps<{
 
 const query = defineModel<string>('query', { required: true });
 
-defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
+const emit = defineEmits<{ search: []; toggle: [id: string]; 'toggle-all': [] }>();
+
+// Enter has to clear the same bar as the button beside it. Emitting regardless
+// sends an empty or unconfigured search to the backend, which comes back as a
+// URL-parse error in place of the message the view already put up.
+function submit() {
+  if (props.isWorking || props.disabled || !query.value.trim()) return;
+  emit('search');
+}
 
 // The out-in swap leaves the field briefly empty, so keep the fades short
 // relative to the hold — a long blank gap reads as flicker.
@@ -51,7 +59,7 @@ onBeforeUnmount(() => clearInterval(timer));
         v-model="query"
         :placeholder="showExamples ? '' : placeholder"
         :disabled="isWorking"
-        @keyup.enter="$emit('search')"
+        @keyup.enter="submit"
       />
       <Transition name="example" mode="out-in">
         <span v-if="showExamples" :key="currentExample" class="search-example">
@@ -62,7 +70,7 @@ onBeforeUnmount(() => clearInterval(timer));
     <button
       class="btn btn-primary"
       :disabled="isWorking || !query.trim() || disabled"
-      @click="$emit('search')"
+      @click="submit"
     >
       <v-icon name="md-search-round" scale="0.85" />
       Search
@@ -200,22 +208,4 @@ onBeforeUnmount(() => clearInterval(timer));
     white-space: nowrap;
   }
 }
-
-.tag-checkbox {
-  width: 1.1em;
-  height: 1.1em;
-  flex-shrink: 0;
-  border: 1.5px solid rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 500ms, border-color 500ms;
-
-  &--checked {
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-}
-
 </style>

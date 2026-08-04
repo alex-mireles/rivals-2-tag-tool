@@ -70,6 +70,9 @@ async function searchPlayer(): Promise<string> {
   progress.value = '';
   tournamentName.value = '';
   tournamentSlug.value = '';
+  // Same reason as the tournament scan: a failed lookup must not leave the
+  // previous player's results sitting under the new error.
+  setResults([]);
   try {
     setResults(
       await invoke<CloudTagMetadata[]>('cloud_search_tags', { apiBaseUrl, query: query.value }),
@@ -89,6 +92,13 @@ async function searchTournament(): Promise<string> {
   if (!query.value.trim()) return '';
   isWorking.value = true;
   cancelled = false;
+  // Clear up front rather than only on success: a scan that fails would
+  // otherwise leave the *previous* tournament's players on screen under an
+  // error about this one, and they'd pack under the old name and slug.
+  setResults([]);
+  progress.value = '';
+  tournamentName.value = '';
+  tournamentSlug.value = '';
   // Deduplicated because a player entered in several events appears per event.
   const matches = new Map<string, CloudTagMetadata>();
   try {

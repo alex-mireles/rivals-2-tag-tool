@@ -38,7 +38,7 @@ function goBack() {
   <div class="titlebar">
     <div data-tauri-drag-region></div>
     <div class="controls">
-      <button @click="appWindow.close()">
+      <button aria-label="Close the app" @click="appWindow.close()">
         <v-icon name="md-close-round" scale="0.85" />
       </button>
     </div>

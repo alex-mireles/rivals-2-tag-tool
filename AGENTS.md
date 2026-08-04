@@ -9,7 +9,7 @@ Tauri v2 desktop app (Windows/macOS) for sharing Rivals of Aether II player tags
 - `pnpm tauri build` — release build + installer
 - `pnpm lint` — ESLint over `src/`
 - `pnpm build` — type-check (`vue-tsc --noEmit`) + Vite build; run this to type-check the frontend
-- `cargo test --manifest-path src-tauri/Cargo.toml` — backend tests
+- `cargo test --manifest-path src-tauri/Cargo.toml` — backend tests. `uesave`'s types can't be built outside their crate, so the export path has one `#[ignore]`d test that runs against a real save: add `-- --ignored` with `R2_SAVE` set to a `Rivals2_PlayerTagSaveSlot.sav`.
 - `pnpm --filter rivals-2-tag-tool-infra test` — cloud API tests (vitest, `infra/`)
 
 `pnpm build` requires `VITE_CLOUD_API_BASE_URL` in `process.env` (CI supplies it; `.env.local` only reaches `import.meta.env`, so a bare local `pnpm build` fails by design).
@@ -45,7 +45,7 @@ For anything the window can't show (computed styles, overflow measurements), rea
 
 - Exporting, packing, and uploading only read the save; importing rewrites it. Never write to the `.sav` outside the import path.
 - `import_tags` writes a sibling temp file and renames over the original. Never truncate the user's save before a successful write.
-- The game's built-in tags (Player1–Player4) are excluded from listing/export.
+- The game's built-in tags (Player1–Player4) are excluded from listing, export **and import**. Import needs its own guard: the conflict list is built from the custom-tag names, so without one a hand-made `.r2tag` named `Player1` reads as "New" and silently replaces a profile the UI can neither show nor restore.
 - Import conflicts default to Skip; user can opt into Overwrite per tag.
 - Cross-version imports are rejected: a `.r2tag`'s root `SaveVersion` must equal the destination save's.
 - Exported filenames sanitize characters invalid on Windows/macOS to `_` and drop bidi/zero-width characters; the tag name inside the `.r2tag` stays unchanged.

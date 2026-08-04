@@ -108,6 +108,20 @@ fn api_url(base: &str, path: &str) -> Result<Url, String> {
     Ok(url)
 }
 
+/// Build an API URL whose trailing path segments are percent-encoded.
+///
+/// Ids reach us from API responses, not from a constant, so splicing one into
+/// a `format!` path lets a value containing `/` or `..` retarget the request:
+/// `Url::parse` would normalise the traversal away rather than reject it.
+fn api_url_segments(base: &str, path: &str, segments: &[&str]) -> Result<Url, String> {
+    let mut url = api_url(base, path)?;
+    url.path_segments_mut()
+        .map_err(|_| "Cloud API URL cannot have path segments".to_string())?
+        .pop_if_empty()
+        .extend(segments);
+    Ok(url)
+}
+
 async fn checked(response: Response) -> Result<Response, String> {
     if response.status().is_success() {
         return Ok(response);
@@ -144,9 +158,10 @@ pub async fn cloud_poll_auth(
     poll_token: String,
 ) -> Result<serde_json::Value, String> {
     let response = client()?
-        .post(api_url(
+        .post(api_url_segments(
             &api_base_url,
-            &format!("v1/auth/requests/{request_id}/poll"),
+            "v1/auth/requests",
+            &[&request_id, "poll"],
         )?)
         .json(&serde_json::json!({ "pollToken": poll_token }))
         .send()
@@ -325,9 +340,10 @@ pub async fn cloud_download_tags(
 
     for tag in tags {
         let response = checked(
-            http.get(api_url(
+            http.get(api_url_segments(
                 &api_base_url,
-                &format!("v1/tags/{}/download", tag.startgg_user_id),
+                "v1/tags",
+                &[&tag.startgg_user_id, "download"],
             )?)
             .send()
             .await
@@ -341,12 +357,15 @@ pub async fn cloud_download_tags(
             MAX_COMPRESSED_BYTES,
             MAX_UNCOMPRESSED_BYTES,
         )?;
-        let actual_hash = format!("{:x}", Sha256::digest(&bytes));
+        // Verified above to equal the payload's own digest, so re-hashing up to
+        // 8 MiB per tag just to name the file would be wasted work. Equality
+        // with a 64-char hex digest also makes the slice below in bounds.
+        let hash = tag.uncompressed_sha256.to_ascii_lowercase();
 
         let file_name = format!(
             "{}-{}.r2tag",
             safe_file_component(&tag.startgg_user_id),
-            &actual_hash[..12]
+            &hash[..12]
         );
         let path = cache_dir.join(file_name);
         fs::write(&path, bytes).map_err(|e| e.to_string())?;
@@ -423,6 +442,24 @@ mod tests {
             format!("{:x}", Sha256::digest(&decoded)),
             format!("{:x}", Sha256::digest(source))
         );
+    }
+
+    #[test]
+    fn url_segments_are_encoded_so_ids_cannot_retarget_the_request() {
+        let url = api_url_segments("https://api.example.com", "v1/tags", &["1234", "download"])
+            .unwrap();
+        assert_eq!(url.as_str(), "https://api.example.com/v1/tags/1234/download");
+
+        // A traversal in the id must stay one segment, not walk up the path.
+        let url =
+            api_url_segments("https://api.example.com", "v1/tags", &["../../v1/me/tag", "download"])
+                .unwrap();
+        assert_eq!(url.path(), "/v1/tags/..%2F..%2Fv1%2Fme%2Ftag/download");
+
+        // A base URL carrying its own prefix keeps it.
+        let url = api_url_segments("https://api.example.com/api/", "v1/tags", &["x", "download"])
+            .unwrap();
+        assert_eq!(url.path(), "/api/v1/tags/x/download");
     }
 
     #[test]

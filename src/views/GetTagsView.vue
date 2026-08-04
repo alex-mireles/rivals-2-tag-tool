@@ -388,15 +388,9 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped lang="scss">
-.action-row {
-  width: 100%;
-  display: flex;
-  gap: 0.625rem;
-
-  .btn {
-    flex: 1;
-    font-size: 0.9em;
-  }
+// Box comes from the global .action-row; only the text scale is this view's.
+.action-row .btn {
+  font-size: 0.9em;
 }
 
 .cloud-notice {
@@ -454,30 +448,6 @@ onBeforeUnmount(() => {
 
   &--warn {
     color: var(--text-warning);
-  }
-}
-
-.result-panel {
-  width: 100%;
-  padding: 1em;
-  border-radius: var(--radius-panel);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5em;
-
-  &--success {
-    background: rgba(0, 255, 170, 0.06);
-    border: 1px solid rgba(0, 255, 170, 0.2);
-  }
-
-  &-msg {
-    font-size: 0.85em;
-    color: var(--text-success);
-  }
-
-  &-path {
-    font-family: 'Ubuntu Sans Mono Variable', monospace;
-    word-break: break-all;
   }
 }
 </style>
