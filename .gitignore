@@ -36,3 +36,6 @@ test-data
 
 # Operating-system files
 .DS_Store
+
+# Artifact Signing
+artifact-signing.json

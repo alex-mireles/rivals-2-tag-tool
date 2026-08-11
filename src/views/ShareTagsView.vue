@@ -10,7 +10,12 @@ import TagSelect from '../components/TagSelect.vue';
 import TagSelectList from '../components/TagSelectList.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import startggIcon from '../assets/startgg.svg';
-import { apiBaseUrl, cloudConfigured, CLOUD_UNCONFIGURED_MESSAGE } from '../cloud';
+import {
+  apiBaseUrl,
+  cloudConfigured,
+  CLOUD_UNCONFIGURED_MESSAGE,
+  describeCloudError,
+} from '../cloud';
 import { useCloudAuth } from '../composables/useCloudAuth';
 import { useSaveFile } from '../composables/useSaveFile';
 import type { CloudTagMetadata, PackSummary } from '../types';
@@ -100,7 +105,7 @@ function handleCloudError(error: unknown) {
     confirmingDelete.value = false;
     errorMsg.value = 'Your session expired — please sign in again.';
   } else {
-    errorMsg.value = message;
+    errorMsg.value = describeCloudError(error);
   }
 }
 
@@ -112,7 +117,7 @@ async function signIn() {
   try {
     await auth.signIn();
   } catch (error) {
-    errorMsg.value = String(error);
+    errorMsg.value = describeCloudError(error);
   }
 }
 

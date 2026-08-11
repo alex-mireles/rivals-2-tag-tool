@@ -2984,10 +2984,11 @@ dependencies = [
 
 [[package]]
 name = "rivals-2-tag-tool"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "base64 0.22.1",
  "flate2",
+ "futures-util",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

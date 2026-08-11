@@ -51,6 +51,7 @@ For anything the window can't show (computed styles, overflow measurements), rea
 - Exported filenames sanitize characters invalid on Windows/macOS to `_` and drop bidi/zero-width characters; the tag name inside the `.r2tag` stays unchanged.
 - A `.r2tag` contains only one tag name + its control settings — nothing else from the save or system. It is a complete save carrying exactly one tag, so it is self-describing.
 - Cloud browsing and saving a `.r2pack` must work with **no save file loaded** — the machine downloading tags may not have the game installed. Only import, export, and publish are gated on `canWriteSave`.
+- Every screen that can finish with nothing to show must say so. `<ImportReview>` is gated on `previews.length`, so anything it hosts (the pack banners included) disappears when a selection yields no previews — the caller has to cover that case itself.
 
 ### `.r2pack` archives
 
@@ -63,10 +64,34 @@ For anything the window can't show (computed styles, overflow measurements), rea
 ### Cloud and settings
 
 - `settings.json` (app config dir) holds **only** `savePath`, written atomically. Never persist the cloud session token — the app runs on shared tournament PCs where a plaintext bearer token would be readable by any process.
-- Staged tag files (cloud downloads and pack extractions alike) share `app_cache_dir()/cloud-tags/` and the same cleanup commands; a 24h sweep runs at startup.
+- Staged tag files (cloud downloads and pack extractions alike) share `app_cache_dir()/cloud-tags/` and the same cleanup commands; a 24h sweep runs at startup. Only the frontend tracks staged paths, and it never sees them when a command returns `Err` — so a command that writes staged files must clean up its own partial output before failing.
+- HTTP throttling (429/503) comes back as the `RATE_LIMITED` sentinel rather than a message, because the tournament scan retries on it. `src/cloud.ts` mirrors the constant and owns the human-readable wording; every cloud error surface goes through `describeCloudError`.
+- The `GET /v1/tournaments/tags` route throttle (1 rps) is calibrated to start.gg's own ~80 req/min token limit, not to the client. It is stage-wide, so concurrent scans *will* see 429s; that is handled by client backoff and by keeping partial results, not by raising the limit.
+- `tauri.conf.json` sets a real CSP. `style-src` needs `'unsafe-inline'` because `oh-vue-icons` injects a `<style>` element at runtime, and `img-src` needs `data:` because Vite inlines `startgg.svg`. The CSP applies only to `frontendDist`, so `tauri dev` never exercises it — verify changes with `tauri build --debug --no-bundle` and run the resulting exe.
 - A `.r2pack` is offline redistribution that outlives cloud deletion — the publish disclosure says so.
 
 ## Versioning / Release
 
-- Version lives in `package.json` and `src-tauri/Cargo.toml` (tauri.conf.json reads it from package.json). Bump both together.
+- Version lives in `package.json` and `src-tauri/Cargo.toml` (tauri.conf.json reads it from package.json). Bump both together. The UI reads `APP_VERSION`, injected from package.json by `vite.config.ts` — nothing hardcodes a version string.
 - Pushing a `v*` tag triggers `.github/workflows/release.yml`, which builds Windows + macOS (ARM) installers.
+- The workflow is three jobs, not one matrix. `create-release` makes the draft up front so both platform jobs upload into a release that already exists; previously each matrix leg created it after building, which only avoided a 422 collision because build times differed by minutes. Keep that ordering if you touch the workflow.
+- Asset names come from `releaseAssetNamePattern`. `[arch]` renders as `x64`/`aarch64` and `[platform]` as `windows`/`darwin` — the Windows job builds its own name by hand, so it has to match: `Rivals-II-Tag-Tool_<version>_windows_x64.exe`.
+
+### Windows code signing
+
+- The Windows exe is signed with **Azure Artifact Signing** (formerly Trusted Signing; the SDK still uses the old `codesigning` spelling in keys, endpoints, and dll names — don't "fix" those).
+- Tauri's `bundle.windows.signCommand` is unusable here: signing runs inside the bundler's per-package-type loop, and the Windows build is gated out of the bundler by both `--no-bundle` and `bundle.active: false` in `tauri.windows.conf.json`. Signing is therefore its own workflow step. Re-enabling bundling to use `signCommand` would also start shipping an NSIS installer, which is a product change, not a build change.
+- Windows is a separate job from macOS because the signing step is a composite Action and must be a workflow step — it can't be invoked from inside `tauri-action`. Both platform jobs depend only on `create-release`, so a macOS failure can't skip the Windows build.
+- Certificates are valid ~3 days, so RFC3161 timestamping is mandatory. The job runs `signtool verify /pa` and fails the build rather than shipping an unsigned or untimestamped exe.
+- CI authenticates as a service principal via `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` repo secrets. `DefaultAzureCredential` takes `EnvironmentCredential` first, which is what makes this deterministic — a personal Microsoft account resolves to the consumer tenant and fails.
+- `src-tauri/artifact-signing.json` is for **local** signing only (`signtool /dmdf`) and is gitignored, so a fresh clone has to recreate it — CI never reads it and passes the same values as Action inputs instead. Changing region, account, or profile means editing both. Shape:
+
+  ```json
+  {
+    "Endpoint": "https://eus.codesigning.azure.net/",
+    "CodeSigningAccountName": "hyperflame-codesign",
+    "CertificateProfileName": "rivals-2-tag-tool"
+  }
+  ```
+
+  Local signing authenticates through `DefaultAzureCredential`, which ignores the tenant `az login` is using. Set `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` in the shell so `EnvironmentCredential` wins; a personal Microsoft account otherwise resolves to the consumer tenant and fails.

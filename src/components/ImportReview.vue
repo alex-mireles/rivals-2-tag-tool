@@ -23,6 +23,15 @@ const errorMsg = ref('');
 
 const compatiblePreviews = computed(() => props.previews.filter((preview) => preview.compatible));
 
+// Two files carrying the same tag name can only leave one tag in the save, so
+// the name lands in two sections of the result panel — imported once, skipped
+// once. Accurate, but it reads like a contradiction without a word of context.
+const hasSplitName = computed(() => {
+  if (!result.value) return false;
+  const imported = new Set(result.value.imported);
+  return result.value.skipped.some((name) => imported.has(name));
+});
+
 // A conflict is anything whose import replaces a tag that would otherwise
 // survive — including a name claimed by an earlier row of this same batch. Two
 // files carrying the same tag name (two "Zetter"s from different players) would
@@ -71,19 +80,25 @@ async function doImport() {
 <template>
   <div v-if="result" class="view-stack">
     <div class="result-panel">
+      <!-- Keyed by position, not by name: a batch can legitimately carry the
+           same tag name twice, and duplicate keys make Vue patch the wrong row. -->
       <div v-if="result.imported.length" class="result-section result-section--success">
         <span>Imported ({{ result.imported.length }})</span>
-        <ul class="result-list"><li v-for="name in result.imported" :key="name">✓ {{ name }}</li></ul>
+        <ul class="result-list"><li v-for="(name, index) in result.imported" :key="index">✓ {{ name }}</li></ul>
       </div>
       <div v-if="result.skipped.length" class="result-section">
         <span>Skipped ({{ result.skipped.length }})</span>
-        <ul class="result-list"><li v-for="name in result.skipped" :key="name">– {{ name }}</li></ul>
+        <ul class="result-list"><li v-for="(name, index) in result.skipped" :key="index">– {{ name }}</li></ul>
       </div>
       <div v-if="result.incompatible.length" class="result-section">
         <span>Incompatible ({{ result.incompatible.length }})</span>
-        <ul class="result-list"><li v-for="name in result.incompatible" :key="name">✕ {{ name }}</li></ul>
+        <ul class="result-list"><li v-for="(name, index) in result.incompatible" :key="index">✕ {{ name }}</li></ul>
       </div>
     </div>
+    <p v-if="hasSplitName" class="hint">
+      A name listed twice came from two files sharing that tag name — only one of them could be
+      written to the save.
+    </p>
     <p v-if="result.imported.length" class="hint">
       Restart Rivals 2 if it is open — it rewrites this file on exit and would discard these tags.
     </p>

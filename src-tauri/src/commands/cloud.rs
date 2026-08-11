@@ -8,7 +8,8 @@ use base64::Engine;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use reqwest::{Client, Response};
+use futures_util::stream::{self, StreamExt};
+use reqwest::{Client, Response, StatusCode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::Manager;
@@ -18,6 +19,20 @@ use super::tags::single_tag_bytes;
 
 const MAX_COMPRESSED_BYTES: usize = 2 * 1024 * 1024;
 pub(crate) const MAX_UNCOMPRESSED_BYTES: usize = 8 * 1024 * 1024;
+
+/// Ceiling on an error body we only ever show 500 characters of.
+const MAX_ERROR_BODY_BYTES: usize = 8 * 1024;
+
+/// How many tag downloads run at once. A 100-entrant pack is 100 request +
+/// redirect round trips, and running them one after another is time a TO spends
+/// staring at a spinner. Kept well under the API's 10 rps default route limit.
+const DOWNLOAD_CONCURRENCY: usize = 6;
+
+/// Sentinel returned instead of a human-readable message when a cloud request
+/// was throttled. The tournament scan retries pages that come back with this,
+/// which means it has to be recognisable without parsing prose — the frontend
+/// matches it against `RATE_LIMITED_ERROR` in `src/cloud.ts`.
+pub(crate) const RATE_LIMITED: &str = "cloud-rate-limited";
 
 /// Scratch directory for tag files waiting to be reviewed and imported —
 /// cloud downloads and `.r2pack` extractions alike. Both have the same
@@ -122,13 +137,44 @@ fn api_url_segments(base: &str, path: &str, segments: &[&str]) -> Result<Url, St
     Ok(url)
 }
 
+/// Buffer at most `limit` bytes of a response body.
+///
+/// `Response::bytes()` buffers whatever the peer chooses to send, so every size
+/// check that runs afterwards is already too late: a misbehaving endpoint, or an
+/// S3 error page standing in for a redirect target, could force the allocation
+/// before we ever look at it. `Content-Length` is a hint and is checked first
+/// only as a cheap rejection; the streamed cap is what actually holds.
+async fn body_with_limit(mut response: Response, limit: usize) -> Result<Vec<u8>, String> {
+    if response.content_length().is_some_and(|len| len > limit as u64) {
+        return Err("Cloud response exceeds the size limit".into());
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        if bytes.len() + chunk.len() > limit {
+            return Err("Cloud response exceeds the size limit".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(bytes)
+}
+
 async fn checked(response: Response) -> Result<Response, String> {
     if response.status().is_success() {
         return Ok(response);
     }
     let status = response.status();
-    let message = response.text().await.unwrap_or_default();
-    let message = message.chars().take(500).collect::<String>();
+    // Throttling is the one failure a caller can do something about, so it
+    // travels as a sentinel rather than as prose the caller would have to parse.
+    if status == StatusCode::TOO_MANY_REQUESTS || status == StatusCode::SERVICE_UNAVAILABLE {
+        return Err(RATE_LIMITED.into());
+    }
+    let body = body_with_limit(response, MAX_ERROR_BODY_BYTES)
+        .await
+        .unwrap_or_default();
+    let message = String::from_utf8_lossy(&body)
+        .chars()
+        .take(500)
+        .collect::<String>();
     Err(format!("Cloud API returned {status}: {message}"))
 }
 
@@ -322,11 +368,54 @@ pub struct CloudDownload {
     pub path: String,
 }
 
+async fn download_one(
+    http: &Client,
+    api_base_url: &str,
+    cache_dir: &Path,
+    tag: CloudDownloadRequest,
+) -> Result<CloudDownload, String> {
+    let response = checked(
+        http.get(api_url_segments(
+            api_base_url,
+            "v1/tags",
+            &[&tag.startgg_user_id, "download"],
+        )?)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?,
+    )
+    .await?;
+    let compressed = body_with_limit(response, MAX_COMPRESSED_BYTES).await?;
+    let bytes = decode_cloud_payload_with_limits(
+        &compressed,
+        &tag.uncompressed_sha256,
+        MAX_COMPRESSED_BYTES,
+        MAX_UNCOMPRESSED_BYTES,
+    )?;
+    // Verified above to equal the payload's own digest, so re-hashing up to
+    // 8 MiB per tag just to name the file would be wasted work. Equality
+    // with a 64-char hex digest also makes the slice below in bounds.
+    let hash = tag.uncompressed_sha256.to_ascii_lowercase();
+
+    let file_name = format!(
+        "{}-{}.r2tag",
+        safe_file_component(&tag.startgg_user_id),
+        &hash[..12]
+    );
+    let path = cache_dir.join(file_name);
+    fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    Ok(CloudDownload {
+        startgg_user_id: tag.startgg_user_id,
+        path: path.to_string_lossy().to_string(),
+    })
+}
+
 /// Download the requested tags into the staging cache.
 ///
 /// Each result carries the user id it belongs to. Callers pair downloads with
 /// their metadata to name archive entries, and a positional result would let a
-/// single reordering silently file a tag under the wrong player's name.
+/// single reordering silently file a tag under the wrong player's name — which
+/// is also what lets these run out of order, a few at a time.
 #[tauri::command]
 pub async fn cloud_download_tags(
     app: tauri::AppHandle,
@@ -336,45 +425,36 @@ pub async fn cloud_download_tags(
     let cache_dir = staging_dir(&app)?;
     fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
     let http = client()?;
-    let mut paths = Vec::with_capacity(tags.len());
 
-    for tag in tags {
-        let response = checked(
-            http.get(api_url_segments(
-                &api_base_url,
-                "v1/tags",
-                &[&tag.startgg_user_id, "download"],
-            )?)
-            .send()
-            .await
-            .map_err(|e| e.to_string())?,
-        )
-        .await?;
-        let compressed = response.bytes().await.map_err(|e| e.to_string())?;
-        let bytes = decode_cloud_payload_with_limits(
-            &compressed,
-            &tag.uncompressed_sha256,
-            MAX_COMPRESSED_BYTES,
-            MAX_UNCOMPRESSED_BYTES,
-        )?;
-        // Verified above to equal the payload's own digest, so re-hashing up to
-        // 8 MiB per tag just to name the file would be wasted work. Equality
-        // with a 64-char hex digest also makes the slice below in bounds.
-        let hash = tag.uncompressed_sha256.to_ascii_lowercase();
+    // Every download is run to completion even once one has failed, rather than
+    // returning at the first error: only the caller tracks staged paths for
+    // cleanup, and it never sees them when this returns `Err`. Collecting first
+    // means the files an aborted run wrote are removed here instead of sitting
+    // in the cache until the 24h sweep.
+    let results: Vec<Result<CloudDownload, String>> = stream::iter(tags)
+        .map(|tag| download_one(&http, &api_base_url, &cache_dir, tag))
+        .buffer_unordered(DOWNLOAD_CONCURRENCY)
+        .collect()
+        .await;
 
-        let file_name = format!(
-            "{}-{}.r2tag",
-            safe_file_component(&tag.startgg_user_id),
-            &hash[..12]
-        );
-        let path = cache_dir.join(file_name);
-        fs::write(&path, bytes).map_err(|e| e.to_string())?;
-        paths.push(CloudDownload {
-            startgg_user_id: tag.startgg_user_id,
-            path: path.to_string_lossy().to_string(),
-        });
+    let mut downloads = Vec::with_capacity(results.len());
+    let mut failure = None;
+    for result in results {
+        match result {
+            Ok(download) => downloads.push(download),
+            Err(error) => {
+                failure.get_or_insert(error);
+            }
+        }
     }
-    Ok(paths)
+
+    if let Some(error) = failure {
+        for download in &downloads {
+            let _ = fs::remove_file(&download.path);
+        }
+        return Err(error);
+    }
+    Ok(downloads)
 }
 
 fn remove_if_in_cache(cache_dir: &Path, path: &Path) -> Result<(), String> {

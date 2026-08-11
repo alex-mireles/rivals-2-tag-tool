@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-import { apiBaseUrl, wait } from '../cloud';
+import { apiBaseUrl, describeCloudError, isRateLimited, wait } from '../cloud';
 import type { CloudTagMetadata, TournamentTagPage } from '../types';
 
 /**
@@ -13,6 +13,14 @@ import type { CloudTagMetadata, TournamentTagPage } from '../types';
  */
 
 const PAGE_THROTTLE_MS = 1100;
+
+/**
+ * The route throttle is stage-wide, not per client: self-pacing just under
+ * 1 rps keeps a lone TO inside it, but a second person scanning anything at the
+ * same time puts both over. Throttled pages are therefore an expected event on
+ * a long scan, not an error — back off and ask again.
+ */
+const RETRY_BACKOFF_MS = [1500, 3000, 6000];
 
 const query = ref('');
 const results = ref<CloudTagMetadata[]>([]);
@@ -82,9 +90,27 @@ async function searchPlayer(): Promise<string> {
     }
     return '';
   } catch (error) {
-    return String(error);
+    return describeCloudError(error);
   } finally {
     isWorking.value = false;
+  }
+}
+
+/** One page of the scan, retried while the service says it is throttling us. */
+async function fetchPage(page: number): Promise<TournamentTagPage> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await invoke<TournamentTagPage>('cloud_tournament_tags', {
+        apiBaseUrl,
+        slug: query.value,
+        page,
+      });
+    } catch (error) {
+      if (!isRateLimited(error) || attempt >= RETRY_BACKOFF_MS.length || cancelled) throw error;
+      progress.value = `Page ${page} was rate limited — waiting to retry…`;
+      await wait(RETRY_BACKOFF_MS[attempt]);
+      if (cancelled) throw error;
+    }
   }
 }
 
@@ -101,15 +127,11 @@ async function searchTournament(): Promise<string> {
   tournamentSlug.value = '';
   // Deduplicated because a player entered in several events appears per event.
   const matches = new Map<string, CloudTagMetadata>();
+  let page = 1;
   try {
-    let page = 1;
     let totalPages = 1;
     do {
-      const response = await invoke<TournamentTagPage>('cloud_tournament_tags', {
-        apiBaseUrl,
-        slug: query.value,
-        page,
-      });
+      const response = await fetchPage(page);
       totalPages = response.totalPages;
       tournamentName.value = response.tournamentName;
       tournamentSlug.value = response.tournamentSlug;
@@ -128,7 +150,14 @@ async function searchTournament(): Promise<string> {
     }
     return '';
   } catch (error) {
-    return String(error);
+    // Publish what the scan did reach. A 40-page bracket that dies on page 31
+    // has already produced nearly all of its results, and dropping the Map on
+    // the floor means starting the whole slow scan over for nothing.
+    setResults([...matches.values()]);
+    const detail = describeCloudError(error);
+    if (!results.value.length) return detail;
+    progress.value = `Scan stopped at page ${page} · ${results.value.length} uploaded tag(s) found so far`;
+    return `${detail} Showing the ${results.value.length} tag(s) found before page ${page}.`;
   } finally {
     isWorking.value = false;
   }

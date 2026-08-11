@@ -10,7 +10,12 @@ import SaveStatusNotice from '../components/SaveStatusNotice.vue';
 import TabBar from '../components/TabBar.vue';
 import ViewHeader from '../components/ViewHeader.vue';
 import startggIcon from '../assets/startgg.svg';
-import { apiBaseUrl, cloudConfigured, CLOUD_UNCONFIGURED_MESSAGE } from '../cloud';
+import {
+  apiBaseUrl,
+  cloudConfigured,
+  CLOUD_UNCONFIGURED_MESSAGE,
+  describeCloudError,
+} from '../cloud';
 import { useCloudSearch } from '../composables/useCloudSearch';
 import { useSaveFile } from '../composables/useSaveFile';
 import { useStagedTags } from '../composables/useStagedTags';
@@ -122,7 +127,7 @@ async function importSelected() {
     await review((await downloadSelected()).map((download) => download.path));
   } catch (error) {
     await staged.cleanup();
-    errorMsg.value = String(error);
+    errorMsg.value = describeCloudError(error);
   } finally {
     isWorking.value = false;
   }
@@ -170,7 +175,7 @@ async function savePack() {
       source: search.tournamentSlug.value || null,
     });
   } catch (error) {
-    errorMsg.value = String(error);
+    errorMsg.value = describeCloudError(error);
   } finally {
     isWorking.value = false;
   }
@@ -208,6 +213,19 @@ async function chooseFiles() {
     }
 
     await review([...loose, ...extracted]);
+
+    // A pack whose every entry is damaged unpacks *successfully* with nothing
+    // usable in it. The damaged-tag banner lives inside <ImportReview>, which is
+    // gated on having previews, so without this the spinner just stops and the
+    // screen looks untouched — no error, no banner, no explanation.
+    if (!previews.value.length) {
+      const damaged = packInfo.value?.skipped.length ?? 0;
+      errorMsg.value = damaged
+        ? `None of the ${damaged} tag(s) in that pack could be read — the file is damaged or incomplete.`
+        : 'No tags could be read from that selection.';
+      packInfo.value = null;
+      await staged.cleanup();
+    }
   } catch (error) {
     await staged.cleanup();
     packInfo.value = null;
