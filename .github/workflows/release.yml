@@ -7,56 +7,21 @@ on:
       - "v*"
 
 jobs:
-  # Create the draft release up front so both platform jobs upload into a
-  # release that already exists. Previously each matrix leg called
-  # getOrCreateRelease after building, which only avoided a 422 collision
-  # because the build times differed by minutes.
-  create-release:
+  publish-tauri:
     permissions:
       contents: write
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.release.outputs.id }}
-    steps:
-      - name: create or reuse draft release
-        id: release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+            args: '--target aarch64-apple-darwin'
+            uploadPlainBinary: false
+          - platform: 'windows-latest'
+            args: '--no-bundle'
+            uploadPlainBinary: true
 
-          # Drafts are not retrievable by tag (GET /releases/tags/{tag} 404s on
-          # them), so scan the full list. awk consumes all input rather than
-          # closing the pipe early, which would trip pipefail via SIGPIPE.
-          find_id() {
-            gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-              --jq ".[] | select(.tag_name==\"$TAG\") | .id" | awk 'NR==1'
-          }
-
-          id=$(find_id)
-          if [ -z "$id" ]; then
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --draft \
-              --title "Rivals II Tag Tool $TAG" \
-              --notes 'Download the asset for your platform:
-
-          - Windows: the portable `.exe`. No installation is required.
-          - macOS: the `.dmg`.
-
-          Windows portable builds require the Microsoft WebView2 Runtime, which is included with Windows 10 and Windows 11.'
-            id=$(find_id)
-          fi
-
-          test -n "$id"
-          echo "id=$id" >> "$GITHUB_OUTPUT"
-
-  publish-macos:
-    needs: create-release
-    permissions:
-      contents: write
-    runs-on: macos-latest
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -72,9 +37,10 @@ jobs:
           cache: "pnpm"
 
       - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
@@ -82,60 +48,32 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: install frontend dependencies
-        run: pnpm install
+        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
+        run: pnpm install # change this to npm or pnpm depending on which one you use.
 
       - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_CLOUD_API_BASE_URL: ${{ vars.VITE_CLOUD_API_BASE_URL }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          uploadPlainBinary: false
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Rivals II Tag Tool v__VERSION__'
+          releaseBody: |
+            Download the asset for your platform:
+
+            - Windows: the portable `.exe`. No installation is required.
+            - macOS: the `.dmg`.
+
+            Windows portable builds require the Microsoft WebView2 Runtime, which is included with Windows 10 and Windows 11.
+          releaseDraft: true
+          prerelease: false
+          uploadPlainBinary: ${{ matrix.uploadPlainBinary }}
           releaseAssetNamePattern: 'Rivals-II-Tag-Tool_[version]_[platform]_[arch][ext]'
-          args: '--target aarch64-apple-darwin'
+          args: ${{ matrix.args }}
 
-  # Windows is separate from the macOS job because the signing step is a
-  # composite GitHub Action and therefore has to be a workflow step — it
-  # cannot be invoked from inside tauri-action. Both jobs depend only on
-  # create-release, so neither can be skipped by the other's failure.
-  publish-windows:
-    needs: create-release
-    permissions:
-      contents: write
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: "pnpm"
-
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
-
-      - name: install frontend dependencies
-        run: pnpm install
-
-      - name: build
-        run: pnpm tauri build --no-bundle
-        env:
-          VITE_CLOUD_API_BASE_URL: ${{ vars.VITE_CLOUD_API_BASE_URL }}
-
-      # Azure Artifact Signing (formerly Trusted Signing). Certificates are
-      # valid for ~3 days, so the RFC3161 timestamp is mandatory, not optional.
-      - name: sign
+      # Certificates are valid ~3 days, so the RFC3161 timestamp is mandatory.
+      - name: sign the Windows binary
+        if: matrix.platform == 'windows-latest'
         uses: azure/artifact-signing-action@v2.0.0
         with:
           azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -149,27 +87,26 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      - name: verify signature and upload
+      - name: replace the release asset with the signed build
+        if: matrix.platform == 'windows-latest'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $exe = 'src-tauri\target\release\rivals-2-tag-tool.exe'
+          $PSNativeCommandUseErrorActionPreference = $true
 
-          # Resolve the newest installed SDK rather than pinning a version the
-          # runner image may drop.
+          $exe = 'src-tauri\target\release\rivals-2-tag-tool.exe'
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" |
             Sort-Object { [version]$_.Directory.Parent.Name } -Descending |
             Select-Object -First 1 -ExpandProperty FullName
-          if (-not $signtool) { throw 'signtool.exe not found on the runner' }
 
-          # Fail the build rather than shipping an unsigned or untimestamped exe.
+          # Fail rather than ship an unsigned or untimestamped exe.
           & $signtool verify /pa /v $exe
-          if ($LASTEXITCODE -ne 0) { throw 'signature verification failed' }
 
+          # Must match what releaseAssetNamePattern produced, or this adds a
+          # second asset instead of replacing the unsigned one.
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $asset = "Rivals-II-Tag-Tool_${version}_windows_x64.exe"
-          Copy-Item $exe $asset
-          gh release upload $env:TAG $asset --repo $env:GITHUB_REPOSITORY --clobber
+          Copy-Item $exe "Rivals-II-Tag-Tool_${version}_windows_x64.exe"
+          gh release upload $env:TAG "Rivals-II-Tag-Tool_${version}_windows_x64.exe" --clobber
