@@ -110,3 +110,67 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           Copy-Item $exe "Rivals-II-Tag-Tool_${version}_windows_x64.exe"
           gh release upload $env:TAG "Rivals-II-Tag-Tool_${version}_windows_x64.exe" --clobber
+
+      # The file the app checks to find out an update exists. This has to run
+      # after signing, because the checksum below must match the exe people
+      # actually download. Each platform writes its own file — Windows and macOS
+      # build at the same time, so sharing one would have them overwrite it.
+      - name: publish the Windows update manifest
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $asset = "Rivals-II-Tag-Tool_${version}_windows_x64.exe"
+          $sha256 = (Get-FileHash $asset -Algorithm SHA256).Hash.ToLower()
+
+          # Careful: the file is named "x86_64" but the exe inside it is named
+          # "x64". Both are correct — the app looks for the first spelling, and
+          # tauri-action produces the second. Don't make them match.
+          $manifest = [ordered]@{
+            version = $version
+            url     = "https://github.com/${env:GITHUB_REPOSITORY}/releases/download/${env:TAG}/${asset}"
+            sha256  = $sha256
+            pubDate = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+          }
+          $manifest | ConvertTo-Json | Set-Content 'latest-windows-x86_64.json' -Encoding utf8
+
+          gh release upload $env:TAG 'latest-windows-x86_64.json' --clobber
+
+      # The Mac app only tells users an update exists, it doesn't install one.
+      # It still writes the same fields so both platforms share a format. The
+      # .dmg on disk has a different name than the uploaded copy, so search for
+      # it rather than guessing.
+      - name: publish the macOS update manifest
+        if: matrix.platform == 'macos-latest'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          version=$(node -p "require('./package.json').version")
+          dmg=$(find src-tauri/target -name '*.dmg' | sort | sed -n '1p')
+          if [ -z "$dmg" ]; then
+            echo "no .dmg found under src-tauri/target" >&2
+            exit 1
+          fi
+
+          asset="Rivals-II-Tag-Tool_${version}_darwin_aarch64.dmg"
+          sha256=$(shasum -a 256 "$dmg" | cut -d' ' -f1)
+
+          cat > latest-darwin-aarch64.json <<EOF
+          {
+            "version": "${version}",
+            "url": "https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/${asset}",
+            "sha256": "${sha256}",
+            "pubDate": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          gh release upload "$TAG" latest-darwin-aarch64.json --clobber

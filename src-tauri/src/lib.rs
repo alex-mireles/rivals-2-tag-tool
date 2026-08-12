@@ -26,6 +26,8 @@ pub fn run() {
             commands::cloud::cloud_download_tags,
             commands::cloud::cleanup_cloud_files,
             commands::cloud::cleanup_stale_cloud_files,
+            commands::update::check_for_update,
+            commands::update::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

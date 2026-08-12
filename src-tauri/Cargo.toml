@@ -1,6 +1,6 @@
 [package]
 name = "rivals-2-tag-tool"
-version = "2.1.1"
+version = "2.2.0"
 description = "Export, share, and import Rivals of Aether II tags & custom controls"
 authors = ["Alex Mireles (HyperFlame)"]
 edition = "2021"
@@ -32,6 +32,12 @@ flate2 = { version = "1", features = ["rust_backend"] }
 # Only for `buffer_unordered`, which bounds how many tag downloads run at once.
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Compares version numbers for the updater. Writing this by hand is easy to get
+# subtly wrong, and wrong here means never updating, or updating in a loop.
+semver = "1"
+# Swaps out the running .exe. Windows won't let a program overwrite its own
+# .exe, but it will let you rename it, which is what this does.
+self-replace = "1"
 sha2 = "0.10"
 url = "2"
 # Default features pull bzip2/lzma/zstd/xz/aes (all C). `deflate` is the only

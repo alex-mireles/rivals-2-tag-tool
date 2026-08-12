@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import SaveStatusNotice from '../components/SaveStatusNotice.vue';
+import UpdateNotice from '../components/UpdateNotice.vue';
 import { EXPECTED_SAVE_FILE_NAME, useSaveFile } from '../composables/useSaveFile';
 
 const appVersion = APP_VERSION;
@@ -32,6 +33,8 @@ const savePathStatus = computed(() => {
       <h1 class="app-title">Rivals II Tag Tool</h1>
       <span class="app-version">v{{ appVersion }}</span>
     </div>
+
+    <UpdateNotice />
 
     <SavePathBar
       :label="savePathDisplay"

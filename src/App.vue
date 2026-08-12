@@ -6,6 +6,7 @@ import HomeView from './views/HomeView.vue';
 import GetTagsView from './views/GetTagsView.vue';
 import ShareTagsView from './views/ShareTagsView.vue';
 import { useSaveFile } from './composables/useSaveFile';
+import { useAppUpdate } from './composables/useAppUpdate';
 
 const appWindow = getCurrentWindow();
 
@@ -15,12 +16,15 @@ const currentView = ref<ViewName>('home');
 const transitionName = ref('slide-forward');
 
 const save = useSaveFile();
+const update = useAppUpdate();
 
 onMounted(() => {
   // Resolve and read the save up front — the user shouldn't have to point the
   // app at a file that lives in a fixed, known location.
   void save.reload();
   void invoke('cleanup_stale_cloud_files').catch(() => undefined);
+  // Nothing waits on this, and it handles its own errors.
+  void update.check();
 });
 
 function navigateTo(view: ViewName) {

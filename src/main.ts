@@ -24,6 +24,7 @@ import {
   MdSearchRound,
   MdExpandmoreRound,
   MdExpandlessRound,
+  MdOpeninnewRound,
 } from 'oh-vue-icons/icons/md';
 import App from './App.vue';
 import '@fontsource-variable/inter';
@@ -56,6 +57,7 @@ addIcons(
   MdSearchRound,
   MdExpandmoreRound,
   MdExpandlessRound,
+  MdOpeninnewRound,
 );
 
 const app = createApp(App);
