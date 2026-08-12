@@ -8,11 +8,15 @@ defineEmits<{
 
 <template>
   <div class="card-view-header">
-    <button class="back-btn" title="Back" @click="$emit('go-back')">
-      <!-- back arrow -->
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24">
-        <path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-      </svg>
+    <!-- `data-tooltip` renders through a ::after pseudo-element, which is not an
+         accessible name; an icon-only button still needs `aria-label`. -->
+    <button
+      class="back-btn"
+      aria-label="Back to the home screen"
+      data-tooltip="Back to the home screen"
+      @click="$emit('go-back')"
+    >
+      <v-icon name="md-arrowback-round" scale="1.1" />
     </button>
     <span class="card-view-header-title">{{ title }}</span>
   </div>

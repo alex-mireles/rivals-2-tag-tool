@@ -1,0 +1,235 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Rivals II Tag Tool cloud tag service
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    AllowedPattern: '[a-z0-9-]+'
+  StartGgClientId:
+    Type: String
+    Default: REPLACE_ME
+  ApiDomainName:
+    Type: String
+    Default: api.rivals2tagtool.com
+    Description: Public custom domain name for the cloud tag API
+  Route53HostedZoneId:
+    Type: String
+    Description: Route 53 public hosted zone ID for rivals2tagtool.com
+  Rivals2VideogameId:
+    Type: String
+    Description: start.gg videogame ID for Rivals of Aether II
+  MaxCompressedBytes:
+    Type: Number
+    Default: 2097152
+  MaxUncompressedBytes:
+    Type: Number
+    Default: 8388608
+  LogRetentionDays:
+    Type: Number
+    Default: 14
+
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [arm64]
+    Timeout: 30
+    MemorySize: 512
+    Tracing: Active
+
+Resources:
+  CloudApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: '$default'
+      Domain:
+        DomainName: !Ref ApiDomainName
+        CertificateArn: !Ref ApiCertificate
+        EndpointConfiguration: REGIONAL
+        SecurityPolicy: TLS_1_2
+        Route53:
+          HostedZoneId: !Ref Route53HostedZoneId
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+      RouteSettings:
+        'GET /v1/tournaments/tags':
+          ThrottlingBurstLimit: 2
+          ThrottlingRateLimit: 1
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationError":"$context.integrationErrorMessage"}'
+
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref ApiDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref ApiDomainName
+          HostedZoneId: !Ref Route53HostedZoneId
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-api'
+      CodeUri: .
+      Handler: src/handler.handler
+      Environment:
+        Variables:
+          TAGS_TABLE: !Ref TagsTable
+          RUNTIME_TABLE: !Ref RuntimeTable
+          TAG_BUCKET: !Ref TagBucket
+          SECRET_ARN: !Ref StartGgSecret
+          STARTGG_CLIENT_ID: !Ref StartGgClientId
+          RIVALS2_VIDEOGAME_ID: !Ref Rivals2VideogameId
+          MAX_COMPRESSED_BYTES: !Ref MaxCompressedBytes
+          MAX_UNCOMPRESSED_BYTES: !Ref MaxUncompressedBytes
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TagsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RuntimeTable
+        - S3CrudPolicy:
+            BucketName: !Ref TagBucket
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref StartGgSecret
+      Events:
+        BeginAuth: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/auth/requests, Method: POST } }
+        AuthCallback: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/auth/callback, Method: GET } }
+        PollAuth: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: '/v1/auth/requests/{id}/poll', Method: POST } }
+        EndSession: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/session, Method: DELETE } }
+        SearchTags: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/tags, Method: GET } }
+        DownloadTag: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: '/v1/tags/{userId}/download', Method: GET } }
+        UploadTag: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/me/tag, Method: PUT } }
+        DeleteTag: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/me/tag, Method: DELETE } }
+        TournamentTags: { Type: HttpApi, Properties: { ApiId: !Ref CloudApi, Path: /v1/tournaments/tags, Method: GET } }
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints: [src/handler.ts]
+        Minify: true
+        Sourcemap: true
+        Target: es2022
+        # The AWS SDK's Node transport uses CommonJS requires for built-in
+        # modules such as node:https. Keeping the Lambda bundle CommonJS lets
+        # Node resolve those requires at runtime.
+        Format: cjs
+        OutExtension: ['.js=.js']
+
+  ApiFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AWS::StackName}-api'
+      RetentionInDays: !Ref LogRetentionDays
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RetentionInDays: !Ref LogRetentionDays
+
+  TagsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: startggUserId, AttributeType: S }
+        - { AttributeName: gamerTagKey, AttributeType: S }
+        - { AttributeName: startggSlug, AttributeType: S }
+      KeySchema:
+        - { AttributeName: startggUserId, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: GamerTagIndex
+          KeySchema: [{ AttributeName: gamerTagKey, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+        - IndexName: SlugIndex
+          KeySchema: [{ AttributeName: startggSlug, KeyType: HASH }]
+          Projection: { ProjectionType: ALL }
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  RuntimeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: key, AttributeType: S }
+      KeySchema:
+        - { AttributeName: key, KeyType: HASH }
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  TagBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules: [{ ObjectOwnership: BucketOwnerEnforced }]
+
+  StartGgSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: start.gg OAuth client secret and server API token
+      SecretString: '{"oauthClientSecret":"REPLACE_ME","apiToken":"REPLACE_ME"}'
+
+  LambdaErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Cloud tag Lambda errors
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions: [{ Name: FunctionName, Value: !Ref ApiFunction }]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  Api5xxAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Cloud tag API 5xx responses
+      Namespace: AWS/ApiGateway
+      MetricName: 5xx
+      Dimensions: [{ Name: ApiId, Value: !Ref CloudApi }]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+Outputs:
+  ApiBaseUrl:
+    Value: !Sub 'https://${ApiDomainName}'
+  OAuthRedirectUrl:
+    Value: !Sub 'https://${ApiDomainName}/v1/auth/callback'
+  AwsApiBaseUrl:
+    Description: AWS-generated endpoint retained for migration and troubleshooting
+    Value: !Sub 'https://${CloudApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}'
+  TagBucketName:
+    Value: !Ref TagBucket
+  StartGgSecretArn:
+    Value: !Ref StartGgSecret

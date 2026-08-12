@@ -1,6 +1,6 @@
 [package]
 name = "rivals-2-tag-tool"
-version = "1.0.0-beta.2"
+version = "2.2.0"
 description = "Export, share, and import Rivals of Aether II tags & custom controls"
 authors = ["Alex Mireles (HyperFlame)"]
 edition = "2021"
@@ -25,3 +25,24 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uesave = "0.7.1"
 tauri-plugin-dialog = "2"
+base64 = "0.22"
+# rust_backend is spelled out because `zip` declares flate2 with default-features
+# off and relies on the parent crate to select a backend.
+flate2 = { version = "1", features = ["rust_backend"] }
+# Only for `buffer_unordered`, which bounds how many tag downloads run at once.
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Compares version numbers for the updater. Writing this by hand is easy to get
+# subtly wrong, and wrong here means never updating, or updating in a loop.
+semver = "1"
+# Swaps out the running .exe. Windows won't let a program overwrite its own
+# .exe, but it will let you rename it, which is what this does.
+self-replace = "1"
+sha2 = "0.10"
+url = "2"
+# Default features pull bzip2/lzma/zstd/xz/aes (all C). `deflate` is the only
+# codec we need and the only pure-Rust way to link flate2 here: the narrower
+# `deflate-flate2` gates the code without enabling zip's optional flate2 dep,
+# and the `deflate-zlib*` variants are C. It also brings zopfli, which is pure
+# Rust. Pinned to a minor because 3.x/4.x bump the MSRV and rename features.
+zip = { version = "2.4", default-features = false, features = ["deflate"] }
