@@ -12,7 +12,7 @@ import type { SaveFileInfo, SaveStatus } from '../types';
  * after another view writes to the save.
  */
 
-export const EXPECTED_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
+export const DEFAULT_SAVE_FILE_NAME = 'Rivals2_PlayerTagSaveSlot.sav';
 
 const status = ref<SaveStatus>('resolving');
 const path = ref('');
@@ -38,7 +38,7 @@ async function run(command: 'resolve_save_file' | 'set_save_path', args?: Record
     apply(await invoke<SaveFileInfo>(command, args));
   } catch (error) {
     // Only a broken environment reaches here — everyday problems (missing,
-    // unreadable, wrong file) come back as a status, not a rejection.
+    // unreadable) come back as a status, not a rejection.
     status.value = 'unreadable';
     errorMsg.value = String(error);
   }

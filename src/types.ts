@@ -3,7 +3,6 @@ export type SaveStatus =
   | 'resolving'
   | 'ready'
   | 'missing'
-  | 'wrong-file'
   | 'unreadable'
   | 'unsupported';
 
@@ -36,6 +35,8 @@ export interface ImportResult {
   imported: string[];
   skipped: string[];
   incompatible: string[];
+  removed: string[];
+  backup_path: string | null;
 }
 
 export interface CloudUser {

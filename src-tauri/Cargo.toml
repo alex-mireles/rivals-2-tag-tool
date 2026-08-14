@@ -1,6 +1,6 @@
 [package]
 name = "rivals-2-tag-tool"
-version = "2.2.0"
+version = "2.3.0"
 description = "Export, share, and import Rivals of Aether II tags & custom controls"
 authors = ["Alex Mireles (HyperFlame)"]
 edition = "2021"

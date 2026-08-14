@@ -4,7 +4,7 @@ import AnimatedCard from '../components/AnimatedCard.vue';
 import SavePathBar from '../components/SavePathBar.vue';
 import SaveStatusNotice from '../components/SaveStatusNotice.vue';
 import UpdateNotice from '../components/UpdateNotice.vue';
-import { EXPECTED_SAVE_FILE_NAME, useSaveFile } from '../composables/useSaveFile';
+import { DEFAULT_SAVE_FILE_NAME, useSaveFile } from '../composables/useSaveFile';
 
 const appVersion = APP_VERSION;
 
@@ -16,7 +16,7 @@ const isResolving = computed(() => save.status.value === 'resolving');
 
 const savePathDisplay = computed(() => {
   if (isResolving.value) return 'Looking for your save file…';
-  if (!save.path.value) return `${EXPECTED_SAVE_FILE_NAME} not found`;
+  if (!save.path.value) return `${DEFAULT_SAVE_FILE_NAME} not found`;
   return save.path.value;
 });
 
