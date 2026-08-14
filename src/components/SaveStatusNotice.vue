@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { EXPECTED_SAVE_FILE_NAME, useSaveFile } from '../composables/useSaveFile';
+import { useSaveFile } from '../composables/useSaveFile';
 
 /**
  * Explains a non-ready save file and offers the matching recovery action.
@@ -23,8 +23,6 @@ const detail = computed(() => {
                 : 'No Rivals 2 save found in the usual location.',
             action: 'choose' as const,
           };
-    case 'wrong-file':
-      return { text: `Expected ${EXPECTED_SAVE_FILE_NAME}.`, action: 'choose' as const };
     case 'unreadable':
       return {
         text: 'Couldn’t read the save file. Is Rivals 2 running?',

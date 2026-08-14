@@ -70,12 +70,10 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: 'Rivals II Tag Tool v__VERSION__'
           releaseBody: |
-            Download the asset for your platform:
+            Download for your platform below.
 
-            - Windows: the portable `.exe`. No installation is required.
-            - macOS: the `.dmg`.
-
-            Windows portable builds require the Microsoft WebView2 Runtime, which is included with Windows 10 and Windows 11.
+            - **Windows**: download the `.exe` and run it. No installer needed.
+            - **Mac**: download the `.dmg`, open it, and drag the app to Applications.
           releaseDraft: true
           prerelease: false
           uploadPlainBinary: ${{ matrix.uploadPlainBinary }}

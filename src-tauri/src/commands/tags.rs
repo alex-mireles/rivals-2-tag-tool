@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufReader, Cursor};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufReader, Cursor, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 use uesave::{Property, PropertyKey, Save, StructValue, ValueVec};
 
 /// Refuse a `.r2tag` that claims one of the game's own profiles. Export already
@@ -10,6 +13,9 @@ use uesave::{Property, PropertyKey, Save, StructValue, ValueVec};
 const BUILT_IN_REJECTED: &str = "Built-in player tags cannot be imported";
 
 pub const DEFAULT_TAG_NAMES: [&str; 4] = ["Player1", "Player2", "Player3", "Player4"];
+pub const MAX_CUSTOM_TAGS: usize = 96;
+
+static UNIQUE_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn is_custom_tag(name: &str) -> bool {
     !DEFAULT_TAG_NAMES.contains(&name)
@@ -107,7 +113,12 @@ pub(crate) fn read_save(path: &str) -> Result<Save, String> {
 /// `Properties` indexes an `IndexMap`, which *panics* on a missing key, and a
 /// save (or a hand-made `.r2tag`) with no tag array is an ordinary input.
 fn tag_array(save: &Save) -> Option<&Vec<StructValue>> {
-    match save.root.properties.0.get(&PropertyKey::from("SavedPlayerTags")) {
+    match save
+        .root
+        .properties
+        .0
+        .get(&PropertyKey::from("SavedPlayerTags"))
+    {
         Some(Property::Array(ValueVec::Struct(structs))) => Some(structs),
         _ => None,
     }
@@ -332,6 +343,13 @@ pub struct ImportInstruction {
     pub overwrite: bool,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ImportMode {
+    Merge,
+    ReplaceCustom,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ImportResult {
     pub imported: Vec<String>,
@@ -339,108 +357,339 @@ pub struct ImportResult {
     /// Tags rejected because their save-format version differs from the
     /// destination save (importing them would fail to write or corrupt data).
     pub incompatible: Vec<String>,
+    /// Existing custom tags removed by a replacement import.
+    pub removed: Vec<String>,
+    /// Byte-for-byte backup made before a replacement import changed the save.
+    pub backup_path: Option<String>,
 }
 
-/// Import tags from .r2tag files into save_path.
-/// Each instruction says whether to overwrite if the name already exists.
+struct PreparedImport {
+    name: String,
+    value: StructValue,
+    existing_pos: Option<usize>,
+}
+
+fn ensure_no_duplicate_instructions(instructions: &[ImportInstruction]) -> Result<(), String> {
+    let mut names = HashSet::with_capacity(instructions.len());
+    for instruction in instructions {
+        if !names.insert(instruction.tag_name.as_str()) {
+            return Err(format!(
+                "Tag '{}' was selected more than once",
+                instruction.tag_name
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn ensure_custom_tag_capacity(count: usize) -> Result<(), String> {
+    if count > MAX_CUSTOM_TAGS {
+        return Err(format!(
+            "This import would leave {count} custom tags, but Rivals II supports at most {MAX_CUSTOM_TAGS}"
+        ));
+    }
+    Ok(())
+}
+
+fn unique_sibling_name(path: &Path, marker: &str, extension: &str) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy())
+        .unwrap_or_else(|| "tag-save".into());
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let counter = UNIQUE_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    parent.join(format!(
+        "{file_name}.{marker}-{stamp}-{}-{counter}.{extension}",
+        std::process::id(),
+    ))
+}
+
+fn create_unique_sibling(
+    path: &Path,
+    marker: &str,
+    extension: &str,
+) -> Result<(PathBuf, File), String> {
+    for _ in 0..100 {
+        let candidate = unique_sibling_name(path, marker, extension);
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(file) => return Ok((candidate, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Err("Could not create a unique sibling file".into())
+}
+
+fn write_temp_save(dest: &Save, save_path: &Path) -> Result<PathBuf, String> {
+    let (temp_path, out) = create_unique_sibling(save_path, "import", "tmp")?;
+    let write_result = (|| -> Result<(), String> {
+        let mut writer = io::BufWriter::new(out);
+        dest.write(&mut writer).map_err(|e| e.to_string())?;
+        writer.flush().map_err(|e| e.to_string())?;
+        let out = writer
+            .into_inner()
+            .map_err(|e| e.into_error().to_string())?;
+        out.sync_all().map_err(|e| e.to_string())
+    })();
+
+    if let Err(error) = write_result {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(error);
+    }
+    Ok(temp_path)
+}
+
+fn create_replacement_backup(save_path: &Path) -> Result<PathBuf, String> {
+    let (backup_path, mut backup) = create_unique_sibling(save_path, "pre-replace", "bak")?;
+    let copy_result = (|| -> Result<(), String> {
+        let mut source = File::open(save_path).map_err(|e| e.to_string())?;
+        io::copy(&mut source, &mut backup).map_err(|e| e.to_string())?;
+        backup.flush().map_err(|e| e.to_string())?;
+        backup.sync_all().map_err(|e| e.to_string())
+    })();
+    if let Err(error) = copy_result {
+        let _ = std::fs::remove_file(&backup_path);
+        return Err(error);
+    }
+    Ok(backup_path)
+}
+
+#[cfg(windows)]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn MoveFileExW(
+            existing_file_name: *const u16,
+            new_file_name: *const u16,
+            flags: u32,
+        ) -> i32;
+    }
+
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
+    // Both paths are sibling files created by this process. MoveFileExW gives
+    // Windows the replace-existing behavior that `std::fs::rename` lacks.
+    let succeeded = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if succeeded == 0 {
+        Err(io::Error::last_os_error().to_string())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), String> {
+    std::fs::rename(source, destination).map_err(|e| e.to_string())
+}
+
+fn empty_import_result(incompatible: Vec<String>) -> ImportResult {
+    ImportResult {
+        imported: Vec::new(),
+        skipped: Vec::new(),
+        incompatible,
+        removed: Vec::new(),
+        backup_path: None,
+    }
+}
+
+/// Import tags from .r2tag files into save_path. Merge honors each
+/// instruction's overwrite choice; replace-custom keeps the built-in profiles
+/// and replaces every custom tag as one transaction.
 #[tauri::command]
 pub async fn import_tags(
     save_path: String,
     instructions: Vec<ImportInstruction>,
+    mode: ImportMode,
 ) -> Result<ImportResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        ensure_no_duplicate_instructions(&instructions)?;
+        if mode == ImportMode::ReplaceCustom && instructions.is_empty() {
+            return Err("Select at least one tag before replacing existing custom tags".into());
+        }
+
         let mut dest = read_save(&save_path)?;
         let dest_version = save_version(&dest);
-
-        let mut imported = Vec::new();
         let mut skipped = Vec::new();
         let mut incompatible = Vec::new();
+        let dest_structs = tag_array(&dest)
+            .ok_or("SavedPlayerTags is missing or is not a struct array in destination save")?;
 
-        // Scope the mutable borrow of dest so dest.write() can proceed after the loop.
+        if mode == ImportMode::ReplaceCustom
+            && dest_structs.iter().any(|sv| tag_name_of(sv).is_none())
         {
-            let dest_structs = tag_array_mut(&mut dest)
-                .ok_or("SavedPlayerTags is missing or is not a struct array in destination save")?;
+            return Err(
+                "Destination SavedPlayerTags contains an entry without a valid TagName".into(),
+            );
+        }
 
-            for instruction in instructions {
-                // The game's own profiles are excluded from listing and export,
-                // so nothing this app produces names one. A file that does is
-                // rejected rather than allowed to replace a profile the user
-                // can neither see in the UI nor restore afterwards.
-                if !is_custom_tag(instruction.tag_name.as_str()) {
-                    incompatible.push(instruction.tag_name);
-                    continue;
-                }
-
-                let existing_pos = dest_structs
-                    .iter()
-                    .position(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()));
-
-                if existing_pos.is_some() && !instruction.overwrite {
-                    skipped.push(instruction.tag_name);
-                    continue;
-                }
-
-                let r2tag_save = read_save(&instruction.path)?;
-
-                // Reject cross-version imports: a tag from a different save format
-                // can't be written into this save (or would lose/garble settings).
-                let source_version = save_version(&r2tag_save);
-                if source_version.is_none() || source_version != dest_version {
-                    incompatible.push(instruction.tag_name);
-                    continue;
-                }
-
-                let source_structs = tag_array(&r2tag_save)
-                    .ok_or_else(|| format!("{}: unexpected format", instruction.path))?;
-
-                let tag_sv = source_structs
-                    .iter()
-                    .find(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()))
-                    .ok_or_else(|| {
-                        format!(
-                            "{}: tag '{}' not found",
-                            instruction.path, instruction.tag_name
-                        )
-                    })?
-                    .clone();
-
-                if let Some(pos) = existing_pos {
-                    dest_structs[pos] = tag_sv;
-                } else {
-                    dest_structs.push(tag_sv);
-                }
-
-                imported.push(instruction.tag_name);
+        let mut prepared = Vec::with_capacity(instructions.len());
+        for instruction in instructions {
+            // The game's own profiles are excluded from listing and export,
+            // so nothing this app produces names one. A file that does is
+            // rejected rather than allowed to replace a profile the user
+            // can neither see in the UI nor restore afterwards.
+            if !is_custom_tag(instruction.tag_name.as_str()) {
+                incompatible.push(instruction.tag_name);
+                continue;
             }
+
+            let existing_pos = dest_structs
+                .iter()
+                .position(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()));
+            if mode == ImportMode::Merge && existing_pos.is_some() && !instruction.overwrite {
+                skipped.push(instruction.tag_name);
+                continue;
+            }
+
+            let r2tag_save = read_save(&instruction.path)?;
+            let source_version = save_version(&r2tag_save);
+            if source_version.is_none() || source_version != dest_version {
+                incompatible.push(instruction.tag_name);
+                continue;
+            }
+
+            let source_structs = tag_array(&r2tag_save)
+                .ok_or_else(|| format!("{}: unexpected format", instruction.path))?;
+            let mut matches = source_structs
+                .iter()
+                .filter(|sv| tag_name_of(sv) == Some(instruction.tag_name.as_str()));
+            let value = matches
+                .next()
+                .ok_or_else(|| {
+                    format!(
+                        "{}: tag '{}' not found",
+                        instruction.path, instruction.tag_name
+                    )
+                })?
+                .clone();
+            if matches.next().is_some() {
+                return Err(format!(
+                    "{}: tag '{}' appears more than once",
+                    instruction.path, instruction.tag_name
+                ));
+            }
+            prepared.push(PreparedImport {
+                name: instruction.tag_name,
+                value,
+                existing_pos,
+            });
         }
 
-        // Serialize into a sibling temp file and rename over the original, so a
-        // failure part-way through (disk full, antivirus, the game holding the
-        // handle) leaves the existing save untouched instead of truncated.
-        // `fs::rename` replaces the destination on both Windows and Unix.
-        let temp_path = std::path::Path::new(&save_path).with_extension("sav.tmp");
-        let write_result = (|| -> Result<(), String> {
-            let out = File::create(&temp_path).map_err(|e| e.to_string())?;
-            let mut writer = std::io::BufWriter::new(out);
-            dest.write(&mut writer).map_err(|e| e.to_string())?;
-            // Surface a failed flush rather than letting BufWriter swallow it on drop.
-            writer.into_inner().map_err(|e| e.to_string())?;
-            Ok(())
-        })();
-
-        if let Err(error) = write_result {
-            let _ = std::fs::remove_file(&temp_path);
-            return Err(error);
+        // Replacement must never silently wipe the destination down to only
+        // the subset whose files happened to pass validation.
+        if mode == ImportMode::ReplaceCustom && !incompatible.is_empty() {
+            return Ok(empty_import_result(incompatible));
         }
-        if let Err(error) = std::fs::rename(&temp_path, &save_path) {
+
+        let current_custom_count = dest_structs
+            .iter()
+            .filter_map(tag_name_of)
+            .filter(|name| is_custom_tag(name))
+            .count();
+        let added_custom_count = prepared
+            .iter()
+            .filter(|item| item.existing_pos.is_none())
+            .count();
+        match mode {
+            // An already-oversized hand-made save can still overwrite tags;
+            // only an operation that grows it is newly violating the limit.
+            ImportMode::Merge if added_custom_count > 0 => {
+                ensure_custom_tag_capacity(current_custom_count + added_custom_count)?;
+            }
+            ImportMode::ReplaceCustom => ensure_custom_tag_capacity(prepared.len())?,
+            ImportMode::Merge => {}
+        }
+
+        if prepared.is_empty() {
+            return Ok(ImportResult {
+                imported: Vec::new(),
+                skipped,
+                incompatible,
+                removed: Vec::new(),
+                backup_path: None,
+            });
+        }
+
+        let imported: Vec<String> = prepared.iter().map(|item| item.name.clone()).collect();
+        let removed = match mode {
+            ImportMode::Merge => {
+                let dest_structs = tag_array_mut(&mut dest).ok_or(NOT_A_TAG_SAVE)?;
+                for item in prepared {
+                    if let Some(pos) = item.existing_pos {
+                        dest_structs[pos] = item.value;
+                    } else {
+                        dest_structs.push(item.value);
+                    }
+                }
+                Vec::new()
+            }
+            ImportMode::ReplaceCustom => {
+                let dest_structs = tag_array_mut(&mut dest).ok_or(NOT_A_TAG_SAVE)?;
+                let removed: Vec<String> = dest_structs
+                    .iter()
+                    .filter_map(tag_name_of)
+                    .filter(|name| is_custom_tag(name))
+                    .map(str::to_string)
+                    .collect();
+                dest_structs.retain(|sv| tag_name_of(sv).is_some_and(|name| !is_custom_tag(name)));
+                dest_structs.extend(prepared.into_iter().map(|item| item.value));
+                removed
+            }
+        };
+
+        let save_path = Path::new(&save_path);
+        let temp_path = write_temp_save(&dest, save_path)?;
+        let backup_path = if mode == ImportMode::ReplaceCustom {
+            match create_replacement_backup(save_path) {
+                Ok(path) => Some(path),
+                Err(error) => {
+                    let _ = std::fs::remove_file(&temp_path);
+                    return Err(format!("Could not back up the destination save: {error}"));
+                }
+            }
+        } else {
+            None
+        };
+
+        if let Err(error) = replace_file(&temp_path, save_path) {
             let _ = std::fs::remove_file(&temp_path);
-            return Err(error.to_string());
+            let backup_note = backup_path
+                .as_ref()
+                .map(|path| format!(" Backup: {}.", path.to_string_lossy()))
+                .unwrap_or_default();
+            return Err(format!(
+                "Could not replace the destination save.{backup_note} {error}"
+            ));
         }
 
         Ok(ImportResult {
             imported,
             skipped,
             incompatible,
+            removed,
+            backup_path: backup_path.map(|path| path.to_string_lossy().to_string()),
         })
     })
     .await
@@ -449,7 +698,11 @@ pub async fn import_tags(
 
 #[cfg(test)]
 mod tests {
-    use super::{is_custom_tag, sanitize_file_stem, unique_file_stem, DEFAULT_TAG_NAMES};
+    use super::{
+        create_replacement_backup, ensure_custom_tag_capacity, ensure_no_duplicate_instructions,
+        is_custom_tag, replace_file, sanitize_file_stem, unique_file_stem, unique_sibling_name,
+        ImportInstruction, ImportMode, DEFAULT_TAG_NAMES, MAX_CUSTOM_TAGS,
+    };
     use std::collections::HashSet;
 
     /// Import and export must agree on which names are the game's own, or a
@@ -457,7 +710,10 @@ mod tests {
     #[test]
     fn built_in_tag_names_are_not_custom() {
         for name in DEFAULT_TAG_NAMES {
-            assert!(!is_custom_tag(name), "{name} must be rejected on both sides");
+            assert!(
+                !is_custom_tag(name),
+                "{name} must be rejected on both sides"
+            );
         }
         assert!(is_custom_tag("Player5"));
         assert!(is_custom_tag("HYPER"));
@@ -511,6 +767,70 @@ mod tests {
         assert_eq!(sanitize_file_stem("Player Tag_42"), "Player Tag_42");
     }
 
+    #[test]
+    fn import_mode_uses_the_frontend_wire_names() {
+        assert_eq!(
+            serde_json::from_str::<ImportMode>(r#""merge""#).unwrap(),
+            ImportMode::Merge
+        );
+        assert_eq!(
+            serde_json::from_str::<ImportMode>(r#""replace-custom""#).unwrap(),
+            ImportMode::ReplaceCustom
+        );
+    }
+
+    #[test]
+    fn capacity_accepts_96_custom_tags_and_rejects_97() {
+        assert!(ensure_custom_tag_capacity(MAX_CUSTOM_TAGS).is_ok());
+        let error = ensure_custom_tag_capacity(MAX_CUSTOM_TAGS + 1).unwrap_err();
+        assert!(error.contains("97 custom tags"));
+        assert!(error.contains("at most 96"));
+    }
+
+    #[test]
+    fn duplicate_import_names_are_rejected_in_input_order() {
+        let instruction = |name: &str| ImportInstruction {
+            path: format!("{name}.r2tag"),
+            tag_name: name.into(),
+            overwrite: false,
+        };
+        let instructions = vec![instruction("A"), instruction("B"), instruction("A")];
+        assert_eq!(
+            ensure_no_duplicate_instructions(&instructions).unwrap_err(),
+            "Tag 'A' was selected more than once"
+        );
+    }
+
+    #[test]
+    fn replacement_backup_is_an_exact_sibling_copy() {
+        let base = std::env::temp_dir().join("rivals-2-tag-tool-backup-test.sav");
+        let source = unique_sibling_name(&base, "source", "sav");
+        std::fs::write(&source, b"exact save bytes").unwrap();
+
+        let backup = create_replacement_backup(&source).unwrap();
+        assert_eq!(backup.parent(), source.parent());
+        assert_eq!(std::fs::read(&backup).unwrap(), b"exact save bytes");
+        assert_eq!(backup.extension().unwrap(), "bak");
+
+        std::fs::remove_file(source).unwrap();
+        std::fs::remove_file(backup).unwrap();
+    }
+
+    #[test]
+    fn file_replacement_overwrites_without_deleting_first() {
+        let base = std::env::temp_dir().join("rivals-2-tag-tool-replace-test.sav");
+        let destination = unique_sibling_name(&base, "destination", "sav");
+        let source = unique_sibling_name(&base, "source", "tmp");
+        std::fs::write(&destination, b"old").unwrap();
+        std::fs::write(&source, b"new").unwrap();
+
+        replace_file(&source, &destination).unwrap();
+        assert_eq!(std::fs::read(&destination).unwrap(), b"new");
+        assert!(!source.exists());
+
+        std::fs::remove_file(destination).unwrap();
+    }
+
     /// Exercises the real export path, which unit tests can't otherwise reach:
     /// `uesave`'s types can't be constructed outside their crate, so there is no
     /// way to hand-build a save fixture. Opt in against your own save with:
@@ -542,5 +862,90 @@ mod tests {
             assert_eq!(first_tag_name(&parsed), Some(name.as_str()));
             assert_eq!(custom_tag_names(&parsed).unwrap(), vec![name.clone()]);
         }
+    }
+
+    #[test]
+    #[ignore = "needs a real save; set R2_SAVE"]
+    fn replace_custom_round_trip_preserves_the_save_and_creates_a_backup() {
+        use super::{
+            custom_tag_names, import_tags, read_save, single_tag_bytes_batch, tag_array,
+            tag_name_of, ImportInstruction, ImportMode, UNIQUE_FILE_COUNTER,
+        };
+        use std::sync::atomic::Ordering;
+        use uesave::{PropertyKey, Save};
+
+        let Ok(source_path) = std::env::var("R2_SAVE") else {
+            eprintln!("skipped: set R2_SAVE to a Rivals II tag save");
+            return;
+        };
+        let source_bytes = std::fs::read(&source_path).unwrap();
+        let source_save = read_save(&source_path).unwrap();
+        let source_names = custom_tag_names(&source_save).unwrap();
+        assert!(
+            !source_names.is_empty(),
+            "save has no custom tags to import"
+        );
+
+        let selected: Vec<String> = source_names.iter().take(2).cloned().collect();
+        let payloads = single_tag_bytes_batch(&source_path, &selected).unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "r2tt-replace-round-trip-{}-{}",
+            std::process::id(),
+            UNIQUE_FILE_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        std::fs::create_dir(&dir).unwrap();
+        let destination = dir.join("Tournament Core.sav");
+        std::fs::write(&destination, &source_bytes).unwrap();
+
+        let mut instructions = Vec::new();
+        for (index, (name, (bytes, _))) in selected.iter().zip(payloads).enumerate() {
+            let path = dir.join(format!("tag-{index}.r2tag"));
+            std::fs::write(&path, bytes).unwrap();
+            instructions.push(ImportInstruction {
+                path: path.to_string_lossy().to_string(),
+                tag_name: name.clone(),
+                overwrite: true,
+            });
+        }
+
+        let destination_path = destination.to_string_lossy().to_string();
+        let result = tauri::async_runtime::block_on(import_tags(
+            destination_path.clone(),
+            instructions,
+            ImportMode::ReplaceCustom,
+        ))
+        .unwrap();
+        assert_eq!(result.imported, selected);
+        assert_eq!(result.removed, source_names);
+        assert!(result.skipped.is_empty());
+        assert!(result.incompatible.is_empty());
+
+        let backup_path = result
+            .backup_path
+            .expect("replacement did not create a backup");
+        assert_eq!(std::fs::read(&backup_path).unwrap(), source_bytes);
+        assert_eq!(std::fs::read(&source_path).unwrap(), source_bytes);
+
+        let replaced = read_save(&destination_path).unwrap();
+        assert_eq!(custom_tag_names(&replaced).unwrap(), selected);
+        let built_ins = |save: &Save| {
+            tag_array(save)
+                .unwrap()
+                .iter()
+                .filter(|value| tag_name_of(value).is_some_and(|name| !is_custom_tag(name)))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(built_ins(&replaced), built_ins(&source_save));
+        assert_eq!(replaced.header, source_save.header);
+        assert_eq!(replaced.schemas, source_save.schemas);
+        assert_eq!(replaced.extra, source_save.extra);
+        let mut replaced_properties = replaced.root.properties.0.clone();
+        let mut source_properties = source_save.root.properties.0.clone();
+        replaced_properties.shift_remove(&PropertyKey::from("SavedPlayerTags"));
+        source_properties.shift_remove(&PropertyKey::from("SavedPlayerTags"));
+        assert_eq!(replaced_properties, source_properties);
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

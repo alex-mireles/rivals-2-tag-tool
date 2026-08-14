@@ -18,9 +18,9 @@ and Windows 11. If it is missing from your system, install the
 
 ## Usage
 
-Your save file is found and loaded automatically on startup — no file picker. If your save lives somewhere unusual, point the app at it once and it remembers.
+Your save file is found and loaded automatically on startup. If your save lives somewhere unusual or has been renamed, point the app at any valid Rivals II tag `.sav` once and it remembers.
 
-There are two screens.
+There are two ways of using the app:
 
 **Get Tags** — bring tags onto this PC:
 
@@ -35,7 +35,7 @@ There are two screens.
 
 **Tournament Organizers:** scan your bracket under **Find Tournament**, hit **Save as .r2pack**, and put the file on a USB stick. On each setup: **Get Tags → From Files → pick the pack → Import**. You only need internet on the machine that builds the pack, so the setups themselves can stay offline.
 
-Cloud files are gzip-compressed before upload and are checked against their hash locally before the game save is modified.
+Cloud files are compressed before upload and are checked against their hash locally before the game save is modified.
 
 ## Contributing / Development Setup
 
@@ -74,11 +74,11 @@ On Windows:
 %LOCALAPPDATA%\Rivals2\Saved\SaveGames\Rivals2_PlayerTagSaveSlot.sav
 ```
 
-The app looks there automatically at startup. If it isn't found — or your save lives elsewhere — use the **⋯** button on the path bar to browse to it. Your choice is remembered between launches; the **⟳** button next to it re-reads the file.
+The app looks there automatically at startup. If it isn't found — or your save lives elsewhere or uses another name — use the File Picker button on the path bar to browse to any valid Rivals II tag `.sav`. Your choice is remembered between launches; the **⟳** button next to it reloads the file.
 
 **The Windows SmartScreen warning came up with "Windows protected your PC." Is that bad?**
 
-Currently the builds aren't code-signed, so Windows doesn't recognize me as the publisher. Click **More info → Run anyway** to run the portable build.
+The app has been signed with Microsoft Azure's Artifact Signing - however, you may still see this pop up when running the app for the first time. Click **More info → Run anyway** to run the portable build.
 
 **macOS says the app "is damaged and can't be opened." What gives?**
 
@@ -90,7 +90,7 @@ xattr -d com.apple.quarantine "/Applications/Rivals II Tag Tool.app"
 
 **Does the tool work on macOS even though Rivals II isn't on Mac?**
 
-Yes. Rivals of Aether II does not natively support macOS, so there's no default save location to look for, but the tool itself runs natively on Mac. As long as you have a valid `Rivals2_PlayerTagSaveSlot.sav` to point it at, you can import and export tags as usual.
+Yes. Rivals of Aether II does not natively support macOS, so there's no default save location to look for, but the tool itself runs natively on Mac. As long as you have a valid Rivals II tag `.sav` to point it at, you can import and export tags as usual; the file does not need to use the game's default name.
 
 **Can I use the tool on a PC that doesn't have Rivals II installed?**
 
@@ -98,7 +98,7 @@ Partly, and deliberately so. With no save file present you can still search the 
 
 **Does this modify my save file?**
 
-Only when importing. Exporting, packing, and publishing just read your save. Importing writes the updated save to a temporary file and then swaps it in, so an interrupted import (full disk, antivirus, the game holding the file) leaves your original untouched rather than truncated. Making your own backup of the `.sav` is still never a bad idea.
+Only when importing. Exporting, packing, and publishing just read your save. Importing writes the updated save to a temporary file and then swaps it in, so an interrupted import (full disk, antivirus, the game holding the file) leaves your original untouched rather than truncated. **Replace existing custom tags** also creates a byte-for-byte backup before removing anything.
 
 **Can Rivals II stay open while importing/exporting tags?**
 
@@ -117,6 +117,8 @@ Note that a `.r2pack` is an offline copy: if someone later deletes their publish
 **What happens if an imported tag already exists on the setup?**
 
 The import screen flags it as a conflict. Conflicts default to **Skip**; toggle individual tags to **Overwrite** if you want to replace the existing version.
+
+Rivals II supports 96 custom tags in addition to Player1–Player4. The import screen shows how many slots the selected tags would use and prevents writing a save above that limit. Tournament organizers can instead choose **Replace existing custom tags** to remove the setup's custom tags and leave only the selected imports; Player1–Player4 are preserved and a backup is created first.
 
 **What becomes public when I publish a cloud tag?**
 

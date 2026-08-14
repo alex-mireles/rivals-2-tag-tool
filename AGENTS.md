@@ -9,7 +9,7 @@ Tauri v2 desktop app (Windows/macOS) for sharing Rivals of Aether II player tags
 - `pnpm tauri build` — release build + installer
 - `pnpm lint` — ESLint over `src/`
 - `pnpm build` — type-check (`vue-tsc --noEmit`) + Vite build; run this to type-check the frontend
-- `cargo test --manifest-path src-tauri/Cargo.toml` — backend tests. `uesave`'s types can't be built outside their crate, so the export path has one `#[ignore]`d test that runs against a real save: add `-- --ignored` with `R2_SAVE` set to a `Rivals2_PlayerTagSaveSlot.sav`.
+- `cargo test --manifest-path src-tauri/Cargo.toml` — backend tests. `uesave`'s types can't be built outside their crate, so export, renamed-save validation, and replace-custom round-trip coverage have `#[ignore]`d tests that run against a real save: add `-- --ignored` with `R2_SAVE` set to a valid Rivals II tag `.sav`.
 - `pnpm --filter rivals-2-tag-tool-infra test` — cloud API tests (vitest, `infra/`)
 
 `pnpm build` requires `VITE_CLOUD_API_BASE_URL` in `process.env` (CI supplies it; `.env.local` only reaches `import.meta.env`, so a bare local `pnpm build` fails by design).
@@ -75,6 +75,8 @@ This one stayed, because getting it wrong silently breaks releases — and it na
 - `import_tags` writes a sibling temp file and renames over the original. Never truncate the user's save before a successful write.
 - The game's built-in tags (Player1–Player4) are excluded from listing, export **and import**. Import needs its own guard: the conflict list is built from the custom-tag names, so without one a hand-made `.r2tag` named `Player1` reads as "New" and silently replaces a profile the UI can neither show nor restore.
 - Import conflicts default to Skip; user can opt into Overwrite per tag.
+- Rivals II supports 96 custom tags plus Player1–Player4. The game blocks creating the 97th custom tag but does not enforce the limit in the save format, so every import mode must reject a final set above 96 before writing.
+- Replace-custom imports preserve the destination's existing Player1–Player4 structs and leave only the selected custom tags. They are all-or-nothing and require a byte-for-byte backup before the destination is replaced.
 - Cross-version imports are rejected: a `.r2tag`'s root `SaveVersion` must equal the destination save's.
 - Exported filenames sanitize characters invalid on Windows/macOS to `_` and drop bidi/zero-width characters; the tag name inside the `.r2tag` stays unchanged.
 - A `.r2tag` contains only one tag name + its control settings — nothing else from the save or system. It is a complete save carrying exactly one tag, so it is self-describing.
