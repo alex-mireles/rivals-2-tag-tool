@@ -190,7 +190,7 @@ async function doImport() {
         :class="{ 'mode-btn--active': mode === 'replace-custom' }"
         @click="setMode('replace-custom')"
       >
-        Overwite save file from scratch
+        Overwrite save file from scratch
       </button>
     </div>
     <p class="hint mode-hint">
