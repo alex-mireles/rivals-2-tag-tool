@@ -20,7 +20,7 @@ and Windows 11. If it is missing from your system, install the
 
 Your save file is found and loaded automatically on startup. If your save lives somewhere unusual or has been renamed, point the app at any valid Rivals II tag `.sav` once and it remembers.
 
-There are two screens.
+There are two ways of using the app:
 
 **Get Tags** — bring tags onto this PC:
 
@@ -35,7 +35,7 @@ There are two screens.
 
 **Tournament Organizers:** scan your bracket under **Find Tournament**, hit **Save as .r2pack**, and put the file on a USB stick. On each setup: **Get Tags → From Files → pick the pack → Import**. You only need internet on the machine that builds the pack, so the setups themselves can stay offline.
 
-Cloud files are gzip-compressed before upload and are checked against their hash locally before the game save is modified.
+Cloud files are compressed before upload and are checked against their hash locally before the game save is modified.
 
 ## Contributing / Development Setup
 
@@ -74,11 +74,11 @@ On Windows:
 %LOCALAPPDATA%\Rivals2\Saved\SaveGames\Rivals2_PlayerTagSaveSlot.sav
 ```
 
-The app looks there automatically at startup. If it isn't found — or your save lives elsewhere or uses another name — use the **⋯** button on the path bar to browse to any valid Rivals II tag `.sav`. Your choice is remembered between launches; the **⟳** button next to it re-reads the file.
+The app looks there automatically at startup. If it isn't found — or your save lives elsewhere or uses another name — use the File Picker button on the path bar to browse to any valid Rivals II tag `.sav`. Your choice is remembered between launches; the **⟳** button next to it reloads the file.
 
 **The Windows SmartScreen warning came up with "Windows protected your PC." Is that bad?**
 
-Currently the builds aren't code-signed, so Windows doesn't recognize me as the publisher. Click **More info → Run anyway** to run the portable build.
+The app has been signed with Microsoft Azure's Artifact Signing - however, you may still see this pop up when running the app for the first time. Click **More info → Run anyway** to run the portable build.
 
 **macOS says the app "is damaged and can't be opened." What gives?**
 
