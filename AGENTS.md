@@ -103,8 +103,8 @@ This one stayed, because getting it wrong silently breaks releases — and it na
 ### In-app updates
 
 - Tauri's updater plugin is **not** used. Its Windows install step only runs an NSIS or MSI installer, and this build has neither (`--no-bundle`, `bundle.active: false`). Adding an installer to satisfy it would be a product change, not a build change — the same reason `signCommand` is unusable.
-- Windows replaces the running exe via `self-replace`. Windows refuses to open a running image for writing but *does* allow renaming one: the live exe is moved aside, the new one takes its path, and the old handle deletes itself at exit. Nothing is removed before the replacement is on disk and verified, so a failed update leaves a working app.
-- After the swap, `current_exe()` still resolves to the original path — which now holds the new binary — so `app.restart()` relaunches the version just installed.
+- Windows replaces the running exe via `self-replace`. Windows refuses to open a running image for writing but *does* allow renaming one: the live exe is moved aside, the new one is installed, then moved to its release filename, and the old handle deletes itself at exit. Nothing is removed before the replacement is on disk and verified, so a failed update leaves a working app.
+- The updater relaunches the new release filename explicitly. `current_exe()` still resolves to the original path after the swap, so Tauri's ordinary `app.restart()` would try to launch the filename that the updater just retired.
 - macOS is **notify-only**, because the shapes differ, not for any trust reason: Windows ships one portable exe that can be swapped, while the mac build is a `.app` inside a `.dmg`. The mac banner opens the releases page.
 - The security gate is TLS to a hard-coded `github.com` host. The manifest's SHA-256 is an *integrity* gate only — it travels the same channel as the binary, so it proves nothing about authorship; what it prevents is replacing the app with a truncated download or a CDN error page and restarting into nothing. `sha256` is deliberately not `#[serde(default)]`: a manifest without one must fail, not install unverified bytes.
 - Verifying the exe's Authenticode signature was considered and rejected. The Azure signing credentials live in the same repository secrets that serve the release, so a compromise reaching one reaches the other; and a signer pinned at compile time would strand every installed copy if the certificate's validated identity ever changed. Releases are still signed — the app just doesn't re-check it.
@@ -125,7 +125,7 @@ This one stayed, because getting it wrong silently breaks releases — and it na
   ```
 
   Then `R2_UPDATE_MANIFEST_URL=http://127.0.0.1:8787/latest-windows-x86_64.json pnpm tauri dev`. Vary one field per run: a wrong `sha256` digit exercises the mismatch banner, `version: 0.0.1` confirms an older release offers nothing, and stopping the server confirms an unreachable manifest stays silent.
-- A successful test run really does replace `target/debug/rivals-2-tag-tool.exe` with whatever it was pointed at — run `cargo build` afterwards to get the dev binary back. `tauri dev` also exits when its binary is swapped out from under it; that is the expected ending, not a failure.
+- A successful test run really does retire `target/debug/rivals-2-tag-tool.exe`, install the downloaded release beside it under its versioned filename, and launch that release — run `cargo build` afterwards to get the dev binary back. `tauri dev` also exits when its binary is swapped out from under it; that is the expected ending, not a failure.
 
 ## Versioning / Release
 

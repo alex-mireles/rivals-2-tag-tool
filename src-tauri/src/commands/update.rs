@@ -12,13 +12,14 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use reqwest::Client;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const REPO_OWNER: &str = "alex-mireles";
 const REPO_NAME: &str = "rivals-2-tag-tool";
@@ -152,6 +153,43 @@ fn is_newer(candidate: &str, current: &str) -> Result<bool, String> {
     Ok(candidate > current)
 }
 
+fn versioned_executable_name(version: &str) -> Result<String, String> {
+    let version = Version::parse(version.trim_start_matches('v'))
+        .map_err(|e| format!("Update manifest has an unreadable version: {e}"))?;
+    Ok(format!("Rivals-II-Tag-Tool_{version}_windows_x64.exe"))
+}
+
+fn update_paths(version: &str) -> Result<(PathBuf, PathBuf), String> {
+    let current = std::env::current_exe()
+        .map_err(|e| format!("Could not locate the running application: {e}"))?;
+    let destination = current.with_file_name(versioned_executable_name(version)?);
+    Ok((current, destination))
+}
+
+fn relaunch_at(app: &AppHandle, path: &Path, previous_path: &Path) -> Result<(), String> {
+    let restart_error = match Command::new(path)
+        .args(app.env().args_os.iter().skip(1))
+        .spawn()
+    {
+        Ok(_) => std::process::exit(0),
+        Err(error) => error,
+    };
+
+    if path != previous_path {
+        // Keep the path the user launched usable if Windows refuses to start
+        // the release under its new name.
+        fs::rename(path, previous_path).map_err(|rollback_error| {
+            format!(
+                "The update was installed, but could not be restarted ({restart_error}) or restored to its old filename ({rollback_error})"
+            )
+        })?;
+    }
+
+    Err(format!(
+        "The update was installed, but could not be restarted: {restart_error}"
+    ))
+}
+
 fn install_dir() -> Result<PathBuf, String> {
     let exe = std::env::current_exe()
         .map_err(|e| format!("Could not locate the running application: {e}"))?;
@@ -242,6 +280,14 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     }
     check_download_url(&manifest.url)?;
 
+    let (current_path, destination) = update_paths(&manifest.version)?;
+    if destination != current_path && destination.exists() {
+        return Err(format!(
+            "Could not install the update because {} already exists",
+            destination.display()
+        ));
+    }
+
     let (staged, digest) = download(&app, &manifest.url).await?;
     if !digest.eq_ignore_ascii_case(manifest.sha256.trim()) {
         // Returning here deletes the bad download.
@@ -258,9 +304,12 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     let _ = fs::remove_file(&path);
     result?;
 
-    // The .exe path hasn't changed, it just holds the new build now, so this
-    // starts the version we installed.
-    app.restart();
+    if destination != current_path {
+        fs::rename(&current_path, &destination)
+            .map_err(|e| format!("The update was installed, but could not be renamed: {e}"))?;
+    }
+
+    relaunch_at(&app, &destination, &current_path)
 }
 
 /// Downloads the update next to the current .exe and returns its checksum.
@@ -339,6 +388,18 @@ mod tests {
     #[test]
     fn a_leading_v_in_the_manifest_is_tolerated() {
         assert!(is_newer("v2.2.0", "2.1.1").unwrap());
+    }
+
+    #[test]
+    fn updated_executables_use_the_release_asset_name() {
+        assert_eq!(
+            versioned_executable_name("2.3.1").unwrap(),
+            "Rivals-II-Tag-Tool_2.3.1_windows_x64.exe"
+        );
+        assert_eq!(
+            versioned_executable_name("v2.4.0-beta.1").unwrap(),
+            "Rivals-II-Tag-Tool_2.4.0-beta.1_windows_x64.exe"
+        );
     }
 
     #[test]
